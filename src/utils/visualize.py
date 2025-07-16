@@ -3,7 +3,7 @@ import os
 import matplotlib.pyplot as plt
 
 # get the path to the TensorBoard log directory
-log_dir = "logs/DPO_pairwise/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+log_dir = input("enter path: ")
 event_file = [f for f in os.listdir(log_dir) if f.startswith("events.out")][0]
 event_path = os.path.join(log_dir, event_file)
 
