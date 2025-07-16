@@ -196,7 +196,9 @@ def prepare_pairwise_data(raw_data: list) -> list:
         response_b = item['response_b']
         
         # Use similarity heuristic for preference; can be replaced by GPT-4o-mini preference
-        better = get_preference_by_similarity(prompt, response_a, response_b)
+        # Determine preference using the reference answer
+        answer = item['answer']
+        better = get_preference_by_similarity(response_a, response_b, answer)
         if better == "A":
             chosen, rejected = response_a, response_b
         else:
@@ -239,7 +241,8 @@ def compute_win_rate(model: AutoModelForCausalLMWithValueHead,
             def get_logprob(text):
                 inputs = tokenizer(prompt + text, return_tensors="pt").to(device)
                 outputs = model(**inputs, labels=inputs["input_ids"])
-                return -outputs[1].item()
+                # Use the loss returned by the model as the negative log-likelihood
+                return -outputs.loss.item()
             
             lp_chosen = get_logprob(chosen)
             lp_rejected = get_logprob(rejected)
