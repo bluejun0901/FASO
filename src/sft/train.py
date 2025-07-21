@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+
 import torch
 from transformers import AutoTokenizer, TrainerCallback
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -7,7 +10,6 @@ from huggingface_hub import login
 from datasets import Dataset
 import pandas as pd
 
-import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
@@ -64,7 +66,6 @@ def preprocess_dataset(dataset: Dataset,
     )
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     login(token=os.getenv("HF_TOKEN"))
 
     # load model and tokenizer 
@@ -78,7 +79,7 @@ if __name__ == "__main__":
 
     print("loading dataet")
     dataset_path = DATA_ROOT / '.kaggle' / 'cnn_dailymail' / 'train.csv'
-    df = pd.read_csv(dataset_path, nrows=1000)  # Load subset of dataset
+    df = pd.read_csv(dataset_path)  # Load subset of dataset
     dataset = Dataset.from_pandas(df)
     print("dataset loaded")
 
