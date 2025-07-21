@@ -11,7 +11,14 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+
+from pathlib import Path
+
 load_dotenv()
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -62,15 +69,16 @@ if __name__ == "__main__":
 
     # load model and tokenizer 
     print("loading model")
-    model_path = Path(str(os.getenv("MODEL_ROOT"))).resolve() / 'sft' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
+    model_path = MODEL_ROOT / 'sft' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForCausalLM.from_pretrained(model_path).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+    model = AutoModelForCausalLM.from_pretrained(str(model_path)).to(device)
     model.warnings_issued = {}
     print("model loaded")
 
     print("loading dataet")
-    df = pd.read_csv("~/.kaggle/cnn_dailymail/train.csv", nrows=1000)  # Load subset of dataset
+    dataset_path = DATA_ROOT / '.kaggle' / 'cnn_dailymail' / 'train.csv'
+    df = pd.read_csv(dataset_path, nrows=1000)  # Load subset of dataset
     dataset = Dataset.from_pandas(df)
     print("dataset loaded")
 
@@ -78,7 +86,7 @@ if __name__ == "__main__":
     dataset = preprocess_dataset(dataset, tokenizer)
     print("dataset preprocessed")
 
-    output_dir = Path(str(os.getenv("MODEL_ROOT"))).resolve() / 'finetuned' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
+    output_dir = MODEL_ROOT / 'finetuned' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),

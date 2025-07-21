@@ -1,11 +1,17 @@
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 
+load_dotenv()
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
+
 # get the path to the TensorBoard log directory
-log_dir = input("enter path: ")
+log_dir = Path(input("enter path: "))
 event_file = [f for f in os.listdir(log_dir) if f.startswith("events.out")][0]
-event_path = os.path.join(log_dir, event_file)
+event_path = log_dir / event_file
 
 # load the TensorBoard event file
 event_acc = EventAccumulator(event_path)
@@ -33,13 +39,13 @@ def save_fig(tag, event_acc, save_dir):
 
     plt.savefig(save_dir, dpi=300)
 
-graph_dir = "graphs/DPO_pairwise/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+graph_dir = PROJECT_ROOT / "graphs" / "DPO_pairwise" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"
 os.makedirs(graph_dir, exist_ok=True)
 
 for tag in event_acc.Tags()["scalars"]:
     print(f"Processing tag: {tag}")
-    save_dir = graph_dir + "/" + tag.replace("/", "_") + ".png"
-    save_fig(tag, event_acc, save_dir)
+    save_dir = graph_dir / f"{tag.replace('/', '_')}.png"
+    save_fig(tag, event_acc, str(save_dir))
 
 
 plt.figure(figsize=(10, 5))
@@ -58,4 +64,4 @@ plt.grid(True)
 plt.legend()
 plt.tight_layout()
 
-plt.savefig(graph_dir + "/train_rewards.png", dpi=300)
+plt.savefig(str(graph_dir / "train_rewards.png"), dpi=300)

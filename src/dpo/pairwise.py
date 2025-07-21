@@ -14,7 +14,13 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import json
 from dotenv import load_dotenv
+from pathlib import Path
+
 load_dotenv()
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -259,16 +265,16 @@ if __name__ == "__main__":
 
     # Load model and tokenizer for summarization and DPO training
     print("loading model")
-    model_path = "models/sft/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    model_path = MODEL_ROOT / "sft" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(model_path).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+    model = AutoModelForCausalLMWithValueHead.from_pretrained(str(model_path)).to(device)
     model.warnings_issued = {}
     print("model loaded")
 
     # Load reference model for evaluation and freeze parameters
     print("loading reference model")
-    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(model_path).to("cpu")
+    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(str(model_path)).to("cpu")
     ref_model.eval()
     for param in ref_model.parameters():
         param.requires_grad = False
@@ -276,7 +282,8 @@ if __name__ == "__main__":
 
     # Load dataset with prompts and reference answers
     print("loading dataet")
-    df = pd.read_csv("~/.kaggle/cnn_dailymail/train.csv", nrows=3000)  # Load subset of dataset
+    dataset_path = DATA_ROOT / ".kaggle" / "cnn_dailymail" / "train.csv"
+    df = pd.read_csv(dataset_path, nrows=3000)  # Load subset of dataset
     df = df[["article", "highlights"]].rename(columns={
         "article": "content",
         "highlights": "answer"
@@ -286,7 +293,8 @@ if __name__ == "__main__":
 
     # Generate raw data by querying model responses
     raw_data = prepare_raw_data(model, tokenizer, dataset)
-    with open("cache/raw_data.json", "w", encoding="utf-8") as f:
+    cache_path = PROJECT_ROOT / "cache" / "raw_data.json"
+    with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(raw_data, f, ensure_ascii=False, indent=4)
 
     # Prepare pairwise comparison data from raw responses
@@ -297,9 +305,9 @@ if __name__ == "__main__":
 
     # Configure DPO training parameters
     training_args = DPOConfig(
-        output_dir="models/rlhf/DPO_pairwise/TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        output_dir=str(MODEL_ROOT / "rlhf" / "DPO_pairwise" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"),
         logging_steps=5,
-        logging_dir="logs/DPO_pairwise/TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        logging_dir=str(PROJECT_ROOT / "logs" / "DPO_pairwise" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"),
         per_device_train_batch_size=2,
         gradient_accumulation_steps=8,
         fp16=True,
@@ -329,7 +337,7 @@ if __name__ == "__main__":
             self.writer.add_scalar("eval/win_rate", win_rate, state.global_step)
             self.writer.flush()
 
-    writer = SummaryWriter(log_dir="logs/DPO_pairwise/TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+    writer = SummaryWriter(log_dir=str(PROJECT_ROOT / "logs" / "DPO_pairwise" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"))
     trainer.add_callback(WinRateCallback(model, tokenizer, dpo_data, writer))
 
     # Start DPO training
