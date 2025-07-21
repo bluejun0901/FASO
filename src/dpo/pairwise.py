@@ -13,6 +13,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import os
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -25,7 +27,7 @@ def init():
 
     global openai_client 
     openai_client = OpenAI(
-        api_key="OPENAI_API_KEY"  # Replace with your OpenAI API key
+        api_key=os.getenv("OPENAI_API_KEY")  # Replace with your OpenAI API key
     )
 
     login(token="HUGGINGFACE_TOKEN")  # Authenticate with Huggingface Hub

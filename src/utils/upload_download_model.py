@@ -51,12 +51,36 @@ def download_model_from_huggingface(repo_id: str,
                       token=token)
     
     print(f"Model downloaded to {model_path}")
+
+def download_specific_folder_from_huggingface(repo_id: str,
+                                               folder_name: str,
+                                               local_dir: str,
+                                               token: str=None):
+    """
+    Downloads a specific folder from a model repository on Hugging Face Hub.
+    
+    Args:
+        repo_id (str): Repository ID on Hugging Face Hub.
+        folder_name (str): Name of the folder to download.
+        local_dir (str): Local directory to save the downloaded folder.
+        token (str, optional): Hugging Face API token. If None, it will use the token stored in the Hugging Face folder.
+    """
+    if token is None:
+        token = HfFolder.get_token()
+    
+    api = HfApi()
+
+    api.snapshot_download(
+        repo_id=repo_id,
+        local_dir=local_dir,
+        repo_type="model",
+        token=token,
+        allow_patterns=[f"{folder_name}/**"]
+    )
     
 if __name__ == "__main__":
-    model_path = Path(__file__).resolve().parents[2] / 'models'
+    model_path = Path(os.getenv("MODEL_ROOT")).resolve()
 
     token = os.getenv("HF_TOKEN") or HfFolder.get_token()
 
-    api = HfApi()
-
-    download_model_from_huggingface("bluejun/LLM_DAG_ALLIGN", str(model_path), token)
+    download_specific_folder_from_huggingface("bluejun/LLM_DAG_ALLIGN", "sft/TinyLlama/TinyLlama-1.1B-Chat-v1.0", str(model_path), token)
