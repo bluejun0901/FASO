@@ -29,6 +29,24 @@ def upload_model_to_huggingface(model_path: str,
     )
     print(f"Model uploaded to https://huggingface.co/{repo_id}")
 
+def upload_specific_folder_to_huggingface(repo_id: str,
+                                          local_dir: str,
+                                          path_in_repo: str,
+                                          token: str=None):
+    if token is None:
+        token = HfFolder.get_token()
+    
+    api = HfApi()
+    
+    api.upload_folder(
+        repo_id=repo_id,
+        folder_path=local_dir,
+        path_in_repo=path_in_repo,
+        commit_message="Upload specific folder",
+        token=token
+    )
+    print(f"Model uploaded to https://huggingface.co/{repo_id}")
+
 def download_model_from_huggingface(repo_id: str,
                                     model_path: str,
                                     token: str=None):
@@ -83,4 +101,10 @@ if __name__ == "__main__":
 
     token = os.getenv("HF_TOKEN") or HfFolder.get_token()
 
-    download_specific_folder_from_huggingface("bluejun/LLM_DAG_ALLIGN", "sft/TinyLlama/TinyLlama-1.1B-Chat-v1.0", str(model_path), token)
+    print("Uploading model to Hugging Face...")
+    upload_specific_folder_to_huggingface(
+        repo_id="bluejun/LLM_DAG_ALLIGN",
+        local_dir=str(model_path / 'finetuned'),
+        path_in_repo="",
+        token=token
+    )

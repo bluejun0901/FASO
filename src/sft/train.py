@@ -14,8 +14,6 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 
-from pathlib import Path
-
 load_dotenv()
 
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
