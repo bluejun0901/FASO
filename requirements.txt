@@ -1,0 +1,11 @@
+torch
+transformers
+trl
+huggingface_hub
+openai
+datasets
+pandas
+python-dotenv
+omegaconf
+matplotlib
+tensorboard
