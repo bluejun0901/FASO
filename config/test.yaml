@@ -1,0 +1,35 @@
+model_name: finetuned/TinyLlama/TinyLlama-1.1B-Chat-v1.0/checkpoint-53200
+dataset_name: cnn_dailymail
+nrow: 2
+
+generation:
+  prompt: |
+    {article}
+    TL;DR:
+  max_new_tokens: 128
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  num_return_sequences: 2
+
+get_preference:
+  builder: pairwise
+  scorer: openai
+  openai:
+    model: gpt-4o-mini
+    api_key: from_env
+    prompt: |
+      Which of the following summaries does a better job of summarizing the most important points in the given article, without including unimportant or irrelevant details? A good summary is both precise and concise.
+
+      Article:
+      {article}
+
+      Summary 1:
+      {summary1}
+
+      Summary 2:
+      {summary2}
+
+      FIRST provide a one-sentence comparison of the two summaries, explaining which you prefer and why. SECOND, on a new line, state only "1" or "2" to indicate your choice. Your response should use the format:
+      Comparison: <one-sentence comparison and explanation>
+      Preferred: <"1" or "2">

@@ -11,5 +11,8 @@
         "num_return_sequences": 2
     }
 
+    "get_preference": {
+        "builder": "pairwise"
     
+    }
 }
