@@ -1,24 +1,7 @@
-import os
-import sys
-from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv()
-
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
-CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
-SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
-sys.path.append(str(SRC_ROOT))
-
 from abc import ABC, abstractmethod
 from typing import Union, Any, Callable, TypeVar
-from tqdm import tqdm
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from datasets import Dataset
 
 from rouge_score import rouge_scorer
 from openai import OpenAI
@@ -27,66 +10,11 @@ import re
 import random
 import time
 
-from datasets import Dataset
-import pandas as pd
 import json
-from utils.utility import *
 
 from omegaconf import OmegaConf
 T = TypeVar("T")
 
-class SummaryGenerator:
-    def __init__(self,
-                 tokenizer: AutoTokenizer,
-                 model: AutoModelForCausalLM,
-                 config: OmegaConf):
-        self.tokenizer = tokenizer
-        self.model = model
-        self.config = config
-    
-    def generate(self, article: str) -> dict | None:
-        prompt_text = self.config.prompt.format(article=article)
-        
-        message = [
-            { "role": "user", "content": prompt_text }
-        ]
-        prompt = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
-
-        inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
-        if inputs.shape[-1] > self.model.config.max_position_embeddings:
-            return None
-        
-        attention_mask = torch.ones(inputs.shape, device=self.model.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            outputs = self.model.generate(
-                inputs,
-                attention_mask=attention_mask,
-                max_new_tokens=self.config.max_new_tokens,
-                do_sample=True,
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-                top_k=self.config.top_k,
-                num_return_sequences=self.config.num_return_sequences,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-
-        output_texts = [
-            self.tokenizer.decode(output[inputs.shape[-1]:], skip_special_tokens=True) for output in outputs
-        ]
-        output_texts = [text.strip() for text in output_texts if text.strip()]
-
-        return {"article": article, "prompt": prompt_text, "summaries": output_texts}
-    
-    def generate_batch(self, articles: Dataset) -> Dataset:
-        def f(example):
-            generation = self.generate(example['article'])
-            if generation is None:
-                return {"summaries": [], "prompt": ""}
-            return {k: v for k, v in generation.items() if k != 'article'}
-        return articles.map(f, num_proc=1, desc="Generating summaries")
-    
 class PreferenceScorer(ABC):
     @abstractmethod
     def require_ref(self) -> bool:
@@ -228,7 +156,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         return requests
     
-    def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T: # type: ignore
         delay = self.initial_backoff
         for i in range(self.max_retries):
             try:
@@ -353,156 +281,9 @@ def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> Pr
         else:
             return OpenAIBatchPreferenceScorer(openai_client, config.openai)
     raise Exception("Unknown scorer")
-    
-class PreferenceBuilder(ABC):
-    @abstractmethod
-    def generate_comparisons(self, dataset: Dataset) -> Dataset:
-        pass
-    
-    @abstractmethod
-    def build_with_comparisons(self, comparisons: list[int]) -> Dataset:
-        pass
-    
-class PairwisePreferenceBuilder(PreferenceBuilder):
-    def __init__(self, scorer):
-        self.pairs = []
-        self.scorer = scorer
-        
-    def generate_comparisons(self, dataset: Dataset) -> list[dict]:
-        for example in dataset:
-            prompt = example['prompt'] # type: ignore
-            ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
-            summaries = example['summaries'] # type: ignore
-            
-            for i, y1 in enumerate(summaries):
-                for j, y2 in enumerate(summaries):
-                    if i < j:
-                        self.pairs.append({
-                            'prompt': prompt,
-                            'y1': y1,
-                            'y2': y2,
-                            'ref': ref
-                        })
-        
-        return self.pairs
-    
-    def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
-        result = []
-        for pref, pair in zip(comparisons, self.pairs):
-            if pref is None:
-                continue
-            chosen, rejected = (pair['y1'], pair['y2']) if pref == 0 else (pair['y2'], pair['y1'])
-            result.append({
-                'prompt': pair['prompt'],
-                'chosen': chosen,
-                'rejected': rejected,
-            })
-        return Dataset.from_list(result)
 
-def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> PreferenceBuilder:
-    if config.builder.lower() == "pairwise":
-        return PairwisePreferenceBuilder(scorer)
-    raise Exception("Unknown preference builder")
-    
 def is_preference_two_step(config: OmegaConf) -> bool:
     try:
         return config.scorer.lower() == "openai" and getattr(config.openai, "type", "") == "batch"
     except Exception:
         return False
-    
-if __name__ == "__main__":
-    config = OmegaConf.load(CONFIG_ROOT / "test.yaml")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-
-    model_path = MODEL_ROOT / config.model_name
-    dataset_path = DATA_ROOT / config.dataset_name
-
-    print(f"Loading model from {model_path}...")
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).to(device)
-    print("Model loaded successfully.")
-
-    print(f"Loading dataset from {dataset_path}...")
-    df = pd.read_csv(dataset_path / "test.csv", nrows=config.nrow if "nrow" in config else None)
-    
-    df = df.rename(columns=dict(config.col_renames))
-    
-    dataset = Dataset.from_pandas(df)
-    print("Dataset loaded successfully.")
-    
-    generator = SummaryGenerator(tokenizer, model, config.generation)
-    dataset = generator.generate_batch(dataset)
-    print("Summaries generated successfully.")
-    
-    if is_preference_two_step(config.get_preference) == False:
-        print("Labeling data...")
-        preference_scorer = get_preference_scorer(config.get_preference, openai_client=client)
-        preference_builder = get_preference_builder(config.get_preference, preference_scorer)
-        
-        comparisons = preference_builder.generate_comparisons(dataset)
-        compared = preference_scorer.compare_batch(comparisons)
-        result = preference_builder.build_with_comparisons(compared)
-        print("Labeled successfully.")
-        
-        filename = get_filename("output", config.get_preference.builder, config.get_preference.scorer, suffix=".json")
-        output_path = DATA_ROOT / config.output_dir / filename
-        
-        print(f"Saving result to {str(output_path)}...")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(str(output_path), "w", encoding="utf-8") as f:
-            json.dump(result.to_dict(), f, ensure_ascii=False, indent=2)
-        print("Saved successfully.")
-    else:
-        print("Creating jsonl file for request...")
-        preference_scorer = get_preference_scorer(config.get_preference, openai_client=client)
-        preference_builder = get_preference_builder(config.get_preference, preference_scorer)
-
-        comparisons = preference_builder.generate_comparisons(dataset)
-        requests = preference_scorer.compare_batch_0(comparisons)
-        print("jsonl file created")
-
-        base_filename = get_filename("request", config.get_preference.builder, config.get_preference.scorer, "*", suffix=".jsonl")
-        print(f"Saving jsonl request to {str(DATA_ROOT / config.output_dir / base_filename)} ({len(requests)} files)...")
-
-        paths = []
-        for i, request in enumerate(requests):
-            request_filename = get_filename(
-                "request",
-                config.get_preference.builder,
-                config.get_preference.scorer,
-                str(i).zfill(len(str(len(requests) - 1))),
-                suffix=".jsonl"
-            )
-            request_output_path = DATA_ROOT / config.output_dir / request_filename
-
-            paths.append(str(request_output_path))
-            request_output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(str(request_output_path), "w", encoding="utf-8") as f:
-                for item in request:
-                    line = json.dumps(item, ensure_ascii=False)
-                    f.write(line + "\n")
-        print("Saved successfully")
-
-        print("Processing Batch...")
-        batch_result = preference_scorer.compare_batch_1(paths)
-        print("Batches processed; summary:")
-        for key, val in batch_result.items():
-            print(f"  {key}: {val}")
-
-        print("Parsing Batch for preference...")
-        compared = preference_scorer.compare_batch_2()
-        print("Batch file Parsed")
-
-        result = preference_builder.build_with_comparisons(compared)
-        
-        filename = get_filename("output", config.get_preference.builder, config.get_preference.scorer, suffix=".json")
-        output_path = DATA_ROOT / config.output_dir / filename
-        
-        print(f"Saving result to {str(output_path)}...")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(str(output_path), "w", encoding="utf-8") as f:
-            json.dump(result.to_dict(), f, ensure_ascii=False, indent=2)
-        print("Saved successfully.")
