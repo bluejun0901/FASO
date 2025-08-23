@@ -4,17 +4,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve()
-CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve()
-SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve()
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
+CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
+SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 sys.path.append(str(SRC_ROOT))
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Union, Any, Callable, TypeVar
 from tqdm import tqdm
 
 import torch
@@ -33,7 +33,7 @@ import json
 from utils.utility import *
 
 from omegaconf import OmegaConf
-
+T = TypeVar("T")
 
 class SummaryGenerator:
     def __init__(self,
@@ -79,21 +79,13 @@ class SummaryGenerator:
 
         return {"article": article, "prompt": prompt_text, "summaries": output_texts}
     
-    def generate_batch(self, articles: Union[list[str], Dataset]) -> Dataset | list[dict]:
-        if isinstance(articles, Dataset):
-            def f(example):
-                generation = self.generate(example['article'])
-                if generation is None:
-                    return {"summaries": [], "prompt": ""}
-                return {k: v for k, v in generation.items() if k != 'article'}
-            return articles.map(f, num_proc=1, desc="Generating summaries")
-        else:
-            outputs = []
-            for article in tqdm(articles, desc="Generating summaries"):
-                result = self.generate(article)
-                if result is not None:
-                    outputs.append(result)
-            return outputs
+    def generate_batch(self, articles: Dataset) -> Dataset:
+        def f(example):
+            generation = self.generate(example['article'])
+            if generation is None:
+                return {"summaries": [], "prompt": ""}
+            return {k: v for k, v in generation.items() if k != 'article'}
+        return articles.map(f, num_proc=1, desc="Generating summaries")
     
 class PreferenceScorer(ABC):
     @abstractmethod
@@ -105,7 +97,7 @@ class PreferenceScorer(ABC):
         pass
     
     @abstractmethod
-    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int]:
+    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         pass
     
 class ROUGEPreferenceScorer(PreferenceScorer):
@@ -123,10 +115,10 @@ class ROUGEPreferenceScorer(PreferenceScorer):
                         
         return 0 if s1 > s2 else 1
     
-    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int]:
+    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
         for pair in pairs:
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref']))
+            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'])) # type: ignore
         return compared
     
 class OpenAIPreferenceScorer(PreferenceScorer):
@@ -135,14 +127,14 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         self.client = client
         self.model_name = config.model
         self.prompt_template = config.prompt
-        self.pattern = config.preference_pattern
+        self.pattern: str = config.preference_pattern
         
     def require_ref(self):
         return self.require_ref_flag
                       
     def compare(self, prompt: str, y1: str, y2: str, ref: str="") -> int | None:
         user_prompt = self.prompt_template.format(article=prompt, summary1=y1, summary2=y2)
-        
+
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -151,14 +143,18 @@ class OpenAIPreferenceScorer(PreferenceScorer):
             ]
         )
         output_text = response.choices[0].message.content
-        
+        assert output_text is not None
+
         match = re.search(self.pattern, output_text)
-        return int(match.group(1)) == 2 if match else None
-    
-    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int]:
+        if not match:
+            return None
+        # '1' means y1 chosen -> 0, '2' means y2 chosen -> 1
+        return 0 if match.group(1) == "1" else 1
+
+    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
         for pair in pairs:
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2']))
+            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'])) #type: ignore
         return compared
     
 class BatchPreferenceScorer(PreferenceScorer):
@@ -197,6 +193,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.paths = []
         self.batch_files = []
         self.batchs = []
+
+        self.pairs = []
     
     def require_ref(self):
         return self.require_ref_flag
@@ -204,12 +202,13 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
     def compare_batch_0(self, pairs: Union[list[dict], Dataset], request_size=30000) -> list[list[dict]]:
         requests = []
         for i, pair in enumerate(pairs):
+            self.pairs.append(pair)
             if i % request_size == 0:
                 requests.append([])
 
-            prompt = pair['prompt']
-            summary1 = pair['y1']
-            summary2 = pair['y2']
+            prompt = pair['prompt'] # type: ignore
+            summary1 = pair['y1'] # type: ignore
+            summary2 = pair['y2'] # type: ignore
 
             user_prompt = self.prompt_template.format(article=prompt, summary1=summary1, summary2=summary2)
             messages = [
@@ -229,7 +228,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         return requests
     
-    def _retry(self, fn, *args, **kwargs):
+    def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         delay = self.initial_backoff
         for i in range(self.max_retries):
             try:
@@ -269,19 +268,19 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         if max_concurrent is None:
             max_concurrent = self.max_concurrent
+        assert max_concurrent is not None
 
-        # Prime the window
         while pending and len(in_flight) < max_concurrent:
             b = self._submit_one(pending.pop(0))
             in_flight[b.id] = b
 
-        # Monitor and refill
         while pending or in_flight:
             time.sleep(self.poll_interval)
 
             to_delete = []
             for batch_id in list(in_flight.keys()):
                 b = self._retry(self.client.batches.retrieve, batch_id)
+                # removed: assert b is Batch
                 if b.status in ("completed", "failed", "expired", "cancelled", "canceled"):
                     to_delete.append(batch_id)
                     finished.append(b)
@@ -298,22 +297,62 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 b = self._submit_one(pending.pop(0))
                 in_flight[b.id] = b
 
-        # Optionally, update self.batchs snapshots with terminal objects
         by_id = {b.id: b for b in self.batchs}
         for b in finished:
             by_id[b.id] = b
         self.batchs = list(by_id.values())
 
         return count
+
+    def _parse_output_line(self, line: str) -> tuple[int, int | None]:
+        obj = json.loads(line)
+        idx = int(obj["custom_id"])  # came from compare_batch_0
+        body = obj.get("response", {}).get("body", {})
+        choices = body.get("choices", [])
+        if not choices:
+            return idx, None
+        msg = choices[0].get("message", {})
+        output_text = msg.get("content", "")
+        match = re.search(self.pattern, output_text)
+        if not match:
+            return idx, None
+        # Map '1' -> 0 (y1), '2' -> 1 (y2)
+        return idx, (0 if match.group(1) == "1" else 1)
     
-def get_preference_scorer(config: OmegaConf, openai_client=None) -> PreferenceScorer:
+    def compare_batch_2(self) -> list[int | None]:
+        result: list[int | None] = [None for _ in range(len(self.pairs))]
+
+        for b in self.batchs:
+            if getattr(b, "status", None) == "completed" and getattr(b, "output_file_id", None):
+                content_resp = self._retry(self.client.files.content, b.output_file_id)
+                # Support both text attribute and binary stream
+                data = getattr(content_resp, "text", None)
+                if data is None:
+                    # Assume file-like stream with .read()
+                    raw = content_resp.read()
+                    if isinstance(raw, bytes):
+                        data = raw.decode("utf-8", errors="ignore")
+                    else:
+                        data = str(raw)
+                for raw_line in data.splitlines():
+                    if not raw_line.strip():
+                        continue
+                    idx, pref = self._parse_output_line(raw_line)
+                    if 0 <= idx < len(result):
+                        result[idx] = pref
+
+        return result
+    
+def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> PreferenceScorer:
     if config.scorer.lower() == "rouge":
         return ROUGEPreferenceScorer(config.rouge)
     if config.scorer.lower() == "openai":
+        assert openai_client is not None
         if config.openai.type != "batch":
             return OpenAIPreferenceScorer(openai_client, config.openai)
         else:
             return OpenAIBatchPreferenceScorer(openai_client, config.openai)
+    raise Exception("Unknown scorer")
     
 class PreferenceBuilder(ABC):
     @abstractmethod
@@ -331,9 +370,9 @@ class PairwisePreferenceBuilder(PreferenceBuilder):
         
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
         for example in dataset:
-            prompt = example['prompt']
-            ref = example['reference'] if self.scorer.require_ref() else ""
-            summaries = example['summaries']
+            prompt = example['prompt'] # type: ignore
+            ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
+            summaries = example['summaries'] # type: ignore
             
             for i, y1 in enumerate(summaries):
                 for j, y2 in enumerate(summaries):
@@ -347,25 +386,23 @@ class PairwisePreferenceBuilder(PreferenceBuilder):
         
         return self.pairs
     
-    def build_with_comparisons(self, comparisons: list[int]) -> Dataset:
+    def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
         result = []
-        
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
                 continue
-            
             chosen, rejected = (pair['y1'], pair['y2']) if pref == 0 else (pair['y2'], pair['y1'])
             result.append({
                 'prompt': pair['prompt'],
                 'chosen': chosen,
                 'rejected': rejected,
             })
-            
         return Dataset.from_list(result)
 
 def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> PreferenceBuilder:
     if config.builder.lower() == "pairwise":
         return PairwisePreferenceBuilder(scorer)
+    raise Exception("Unknown preference builder")
     
 def is_preference_two_step(config: OmegaConf) -> bool:
     try:
@@ -454,3 +491,18 @@ if __name__ == "__main__":
         print("Batches processed; summary:")
         for key, val in batch_result.items():
             print(f"  {key}: {val}")
+
+        print("Parsing Batch for preference...")
+        compared = preference_scorer.compare_batch_2()
+        print("Batch file Parsed")
+
+        result = preference_builder.build_with_comparisons(compared)
+        
+        filename = get_filename("output", config.get_preference.builder, config.get_preference.scorer, suffix=".json")
+        output_path = DATA_ROOT / config.output_dir / filename
+        
+        print(f"Saving result to {str(output_path)}...")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(str(output_path), "w", encoding="utf-8") as f:
+            json.dump(result.to_dict(), f, ensure_ascii=False, indent=2)
+        print("Saved successfully.")
