@@ -1,7 +1,7 @@
 model_name: finetuned/TinyLlama/TinyLlama-1.1B-Chat-v1.0/checkpoint-53835
 
 dataset_name: cnn_dailymail
-nrow: 2
+nrow: 30000
 col_renames:
   highlights: reference
   

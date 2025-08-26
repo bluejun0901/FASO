@@ -21,7 +21,7 @@ class PreferenceScorer(ABC):
         pass
     
     @abstractmethod
-    def compare(self, prompt: str, y1: str, y2: str, ref: str) -> int | None:
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None=None) -> int | None:
         pass
     
     @abstractmethod
@@ -37,7 +37,7 @@ class ROUGEPreferenceScorer(PreferenceScorer):
     def require_ref(self):
         return self.require_ref_flag
                         
-    def compare(self, prompt: str, y1: str, y2: str, ref: str) -> int | None:
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None=None) -> int | None:
         s1 = self.scorer.score(ref, y1)[self.rouge_type].fmeasure
         s2 = self.scorer.score(ref, y2)[self.rouge_type].fmeasure
                         
@@ -85,6 +85,46 @@ class OpenAIPreferenceScorer(PreferenceScorer):
             compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'])) #type: ignore
         return compared
     
+class CachedPreferenceScorer(PreferenceScorer):
+    def __init__(self, comparison_file: str):
+        self.require_ref_flag = False
+        self.comparison_file_path = comparison_file
+        self._cache: dict[str, int] = {}
+        self._load_file()
+
+    def _normalize_id(self, s: str) -> str:
+        parts = [p.strip() for p in s.split(",")]
+        return ", ".join(parts)
+
+    def _load_file(self) -> None:
+        self._cache.clear()
+        with open(self.comparison_file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                key = self._normalize_id(str(obj["id"]))
+                val = int(obj["result"])
+                self._cache[key] = val
+
+    def require_ref(self):
+        return self.require_ref_flag
+
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None = None) -> int | None:
+        if meta is None:
+            raise Exception("'meta' field must be included when calling CachedPreferenceScorer")
+        key = self._normalize_id(str(meta))
+        if key not in self._cache:
+            raise KeyError(f"Comparison id '{key}' not found in {self.comparison_file_path}")
+        return self._cache[key]
+
+    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        compared: list[int | None] = []
+        for pair in pairs:
+            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'], pair['meta']))  # type: ignore
+        return compared
+    
 class BatchPreferenceScorer(PreferenceScorer):
     @abstractmethod
     def require_ref(self) -> bool:
@@ -104,6 +144,10 @@ class BatchPreferenceScorer(PreferenceScorer):
     def compare_batch_1(self, path: list[str]) -> dict:
         pass
 
+    @abstractmethod
+    def compare_batch_2(self) -> list[int | None]:
+        pass
+
 class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
     def __init__(self, client: OpenAI, config: OmegaConf):
         self.require_ref_flag = False
@@ -111,7 +155,6 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.model_name = config.model
         self.prompt_template = config.prompt
         self.pattern = config.preference_pattern
-
         c = getattr(config, "batch", None)
         self.max_concurrent = getattr(c, "max_concurrent", 3) if c is not None else 3
         self.max_retries = getattr(c, "max_retries", 5) if c is not None else 5
@@ -123,12 +166,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.batchs = []
 
         self.pairs = []
+
     
     def require_ref(self):
         return self.require_ref_flag
     
     def compare_batch_0(self, pairs: Union[list[dict], Dataset], request_size=30000) -> list[list[dict]]:
         requests = []
+        self.total = len(pairs)
         for i, pair in enumerate(pairs):
             self.pairs.append(pair)
             if i % request_size == 0:
@@ -139,18 +184,17 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             summary2 = pair['y2'] # type: ignore
 
             user_prompt = self.prompt_template.format(article=prompt, summary1=summary1, summary2=summary2)
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_prompt}
-            ]
             body = {
                 "model": self.model_name,
-                "messages": messages
+                "input": user_prompt,
+                "reasoning": {
+                    "effort": "minimal"
+                }
             }
             requests[i // request_size].append({
                 "custom_id": f"{i}",
                 "method": "POST",
-                "url": "/v1/chat/completions",
+                "url": "/v1/responses",
                 "body": body
             })
 
@@ -173,7 +217,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         batch = self._retry(
             self.client.batches.create,
             input_file_id=batch_file.id,
-            endpoint="/v1/chat/completions",
+            endpoint="/v1/responses",
             completion_window="24h",
         )
         self.batch_files.append(batch_file)
@@ -190,7 +234,6 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             "completed": 0,
             "failed": 0,
             "expired": 0,
-            "cancelled": 0,
             "canceled": 0,
         }
 
@@ -208,8 +251,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             to_delete = []
             for batch_id in list(in_flight.keys()):
                 b = self._retry(self.client.batches.retrieve, batch_id)
-                # removed: assert b is Batch
-                if b.status in ("completed", "failed", "expired", "cancelled", "canceled"):
+
+                if b.status in ("completed", "failed", "expired", "canceled"):
                     to_delete.append(batch_id)
                     finished.append(b)
                     if b.status in count:
@@ -220,6 +263,19 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
             for bid in to_delete:
                 in_flight.pop(bid, None)
+
+            agg_counts = {"total": 0, "completed": 0, "failed": 0}
+            for _b in list(in_flight.values()) + finished:
+                rc = getattr(_b, "request_counts", None)
+                if rc:
+                    agg_counts["total"] += rc.total
+                    agg_counts["completed"] += rc.completed
+                    agg_counts["failed"] += rc.failed
+
+            if agg_counts["total"] >= 0:
+                gprog = int(50 * agg_counts["completed"] / agg_counts["total"])
+                gbar = "[" + "#" * gprog + "-" * (50 - gprog) + "]"
+                print(f"ALL progress: {gbar} {agg_counts['completed']}/{agg_counts['total']} ", f"(failed: {agg_counts['failed']})")
 
             while pending and len(in_flight) < max_concurrent:
                 b = self._submit_one(pending.pop(0))
