@@ -197,4 +197,5 @@ def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> Prefe
         return AcyclicReasonPreferenceBuilder(scorer)
     if name == "cyclic_modified_prob":
         return CyclicModifiedProbPreferenceBuilder(scorer)
-    raise Exception(f"Unknown preference builder: {config.builder}")
+    raise Exception(f"Unknown preference builder: {config.type}")
+
