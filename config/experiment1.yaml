@@ -4,7 +4,7 @@ dataset_name: cnn_dailymail
 nrow: 30000
 col_renames:
   highlights: reference
-  
+
 output_dir: preprocessed
 
 generation:
@@ -17,11 +17,8 @@ generation:
   top_k: 50
   num_return_sequences: 10
 
-get_preference:
-  builder: pairwise
-  scorer: openai
-  # rouge:
-  #   type: rougeL
+scorer:
+  type: openai
   openai:
     type: batch
     batch:
@@ -46,3 +43,6 @@ get_preference:
       Comparison: <one-sentence comparison and explanation>
       Preferred: <"1" or "2">
     preference_pattern: "Preferred:\\s*[\"']?([12])[\"']?"
+
+builder:
+  type: pairwise

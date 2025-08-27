@@ -52,9 +52,6 @@ if __name__ == "__main__":
         api_key=os.getenv("OPENAI_API_KEY")
     )
 
-    model_path = MODEL_ROOT / config.model_name
-    dataset_path = DATA_ROOT / config.dataset_name
-
     gen_filename = input("input generation filename: ")
     gen_output_path = DATA_ROOT / config.output_dir / gen_filename
     print(f"Loading generated ouputs from {str(gen_output_path)}...")
@@ -63,15 +60,15 @@ if __name__ == "__main__":
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
     
-    if is_preference_two_step(config.get_preference) == False:
+    if is_preference_two_step(config.scorer) == False:
         print("Labeling data...")
-        preference_scorer = get_preference_scorer(config.get_preference, openai_client=client)
+        preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
         
         comparisons = generate_comparisons(dataset, preference_scorer)
         compared = preference_scorer.compare_batch(comparisons)
         print("Labeled successfully.")
         
-        filename = get_filename("comparison", config.get_preference.builder, config.get_preference.scorer, suffix=".jsonl")
+        filename = get_filename("comparison", config.builder, config.scorer, suffix=".jsonl")
         output_path = DATA_ROOT / config.output_dir / filename
         
         print(f"Saving result to {str(output_path)}...")
@@ -89,7 +86,7 @@ if __name__ == "__main__":
         requests = preference_scorer.compare_batch_0(comparisons)
         print("jsonl file created")
 
-        base_path = get_filename("request", config.get_preference.builder, config.get_preference.scorer, suffix="")
+        base_path = get_filename("request", config.builder, config.scorer, suffix="")
         print(f"Saving jsonl request to {str(DATA_ROOT / config.output_dir / base_path)} ({len(requests)} files)...")
 
         paths = []

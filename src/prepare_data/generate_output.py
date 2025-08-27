@@ -16,8 +16,6 @@ sys.path.append(str(SRC_ROOT))
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from openai import OpenAI
-
 from datasets import Dataset
 import pandas as pd
 import json
@@ -51,7 +49,7 @@ if __name__ == "__main__":
     dataset = generator.generate_batch(dataset)
     print("Summaries generated successfully.")
 
-    gen_filename = get_filename("generated", config.get_preference.builder, config.get_preference.scorer, suffix=".json")
+    gen_filename = get_filename("generated", config.builder.type, config.scorer.type, suffix=".json")
     gen_output_path = DATA_ROOT / config.output_dir / gen_filename
     print(f"Saving generated summeries to {str(gen_output_path)}...")
     gen_output_path.parent.mkdir(parents=True, exist_ok=True)

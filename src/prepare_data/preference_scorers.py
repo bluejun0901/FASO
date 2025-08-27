@@ -63,12 +63,9 @@ class OpenAIPreferenceScorer(PreferenceScorer):
     def compare(self, prompt: str, y1: str, y2: str, ref: str="") -> int | None:
         user_prompt = self.prompt_template.format(article=prompt, summary1=y1, summary2=y2)
 
-        response = self.client.chat.completions.create(
+        response = self.client.responses.create(
             model=self.model_name,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_prompt}
-            ]
+            input=user_prompt
         )
         output_text = response.choices[0].message.content
         assert output_text is not None
@@ -164,6 +161,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.paths = []
         self.batch_files = []
         self.batchs = []
+        self.total = 0
 
         self.pairs = []
 
@@ -265,10 +263,10 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 in_flight.pop(bid, None)
 
             agg_counts = {"total": 0, "completed": 0, "failed": 0}
+            agg_counts["total"] = self.total
             for _b in list(in_flight.values()) + finished:
                 rc = getattr(_b, "request_counts", None)
                 if rc:
-                    agg_counts["total"] += rc.total
                     agg_counts["completed"] += rc.completed
                     agg_counts["failed"] += rc.failed
 
@@ -326,11 +324,11 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                         result[idx] = pref
 
         return result
-    
+
 def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> PreferenceScorer:
-    if config.scorer.lower() == "rouge":
+    if config.type.lower() == "rouge":
         return ROUGEPreferenceScorer(config.rouge)
-    if config.scorer.lower() == "openai":
+    if config.type.lower() == "openai":
         assert openai_client is not None
         if config.openai.type != "batch":
             return OpenAIPreferenceScorer(openai_client, config.openai)
@@ -339,7 +337,4 @@ def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> Pr
     raise Exception("Unknown scorer")
 
 def is_preference_two_step(config: OmegaConf) -> bool:
-    try:
-        return config.scorer.lower() == "openai" and getattr(config.openai, "type", "") == "batch"
-    except Exception:
-        return False
+    return config.type.lower() == "openai" and getattr(config.openai, "type", "") == "batch"

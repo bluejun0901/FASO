@@ -13,7 +13,7 @@ class PreferenceBuilder(ABC):
     @abstractmethod
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
         pass
-    
+
 # 완전 그래프, 사이클 O
 class CyclicPreferenceBuilder(PreferenceBuilder):
     def __init__(self, scorer):
@@ -79,7 +79,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
     """
     Builds a DAG of preferences (cycle-free). Reasoning OFF.
     """
-    def __init__(self, scorer):
+    def __init__(self, config: OmegaConf, scorer: PreferenceScorer):
         self.scorer = scorer
         self.example_count = 0
         self.pairs: list[dict] = []
@@ -105,9 +105,40 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
         return self.pairs
 
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
-        self.edges = [[] for i in range(self.example_count)]
-        raise NotImplementedError("AcyclicNoReasonPreferenceBuilder.build_with_comparisons is not implemented yet.")
+        self.groups = [[] for _ in range(self.example_count)]
+        for pref, pair in zip(comparisons, self.pairs):
+            if pref is None:
+                continue
+            k = int(pair['meta'].split(",")[0])
+            self.groups[k].append((pair, pref))
 
+        result = []
+        for group in self.groups:
+            prompt = group[0][0]['prompt']
+            max_idx = 0
+
+            for pair, pref in group:
+                _, i, j = map(int, pair['meta'].split(", "))
+                max_idx = max(max_idx, i, j)
+
+            summaries = [""] * (max_idx + 1)
+            graph = [[] for _ in range(max_idx + 1)]
+
+            for pair, pref in group:
+                _, i, j = map(int, pair['meta'].split(", "))
+                y1, y2 = pair['y1'], pair['y2']
+                max_idx = max(max_idx, i, j)
+                summaries[i] = y1
+                summaries[j] = y2
+                if pref == 0:
+                    graph[i].append(j)
+                else:
+                    graph[j].append(i)
+
+            # feedback arc 제거 (Kahn's algorithm)
+            # TODO: 사이클 제거하기 구현, config에서 옵션으로 어떤 알고리즘 쓸지 선택 가능하게
+
+        raise NotImplementedError("AcyclicNoReasonPreferenceBuilder.build_with_comparisons is not implemented yet.")
 
 # 사이클 X, 추론 O, DPO
 class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
@@ -155,13 +186,13 @@ class CyclicModifiedProbPreferenceBuilder(PreferenceBuilder):
         raise NotImplementedError("CyclicModifiedProbPreferenceBuilder.build_with_comparisons is not implemented yet.")
 
 def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> PreferenceBuilder:
-    name = config.builder.lower()
+    name = config.type.lower()
     if name == "cyclic":
         return CyclicPreferenceBuilder(scorer)
     if name == "rank":
         return RankPreferenceBuilder(scorer)
     if name == "acyclic_no_reason":
-        return AcyclicNoReasonPreferenceBuilder(scorer)
+        return AcyclicNoReasonPreferenceBuilder(config, scorer)
     if name == "acyclic_reason":
         return AcyclicReasonPreferenceBuilder(scorer)
     if name == "cyclic_modified_prob":
