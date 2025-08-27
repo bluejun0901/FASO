@@ -47,14 +47,19 @@ if __name__ == "__main__":
     comparison_file = DATA_ROOT / config.output_dir / input("input comparison filename: ")
 
     preference_scorer = CachedPreferenceScorer(str(comparison_file))
-    preference_builder = get_preference_builder(config.get_preference, preference_scorer)
+    preference_builder = get_preference_builder(config.builder, preference_scorer)
     
     comparisons = preference_builder.generate_comparisons(dataset)
     compared = preference_scorer.compare_batch(comparisons)
     result = preference_builder.build_with_comparisons(compared)
     print("Labeled successfully.")
     
-    filename = get_filename("output", config.get_preference.builder, config.get_preference.scorer, suffix=".json")
+    filename = get_filename(
+        "output",
+        config.builder.type,
+        config.scorer.type,
+        suffix=".json",
+    )
     output_path = DATA_ROOT / config.output_dir / filename
     
     print(f"Saving result to {str(output_path)}...")

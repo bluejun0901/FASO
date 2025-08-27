@@ -68,7 +68,12 @@ if __name__ == "__main__":
         compared = preference_scorer.compare_batch(comparisons)
         print("Labeled successfully.")
         
-        filename = get_filename("comparison", config.builder, config.scorer, suffix=".jsonl")
+        filename = get_filename(
+            "comparison",
+            config.builder.type,
+            config.scorer.type,
+            suffix=".jsonl",
+        )
         output_path = DATA_ROOT / config.output_dir / filename
         
         print(f"Saving result to {str(output_path)}...")
@@ -78,15 +83,22 @@ if __name__ == "__main__":
                 line = json.dumps({"id": pair["meta"], "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
         print("Saved successfully.")
+
+
     else:
         print("Creating jsonl file for request...")
-        preference_scorer = get_preference_scorer(config.get_preference, openai_client=client)
+        preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
 
         comparisons = generate_comparisons(dataset, preference_scorer)
         requests = preference_scorer.compare_batch_0(comparisons)
         print("jsonl file created")
 
-        base_path = get_filename("request", config.builder, config.scorer, suffix="")
+        base_path = get_filename(
+            "request",
+            config.builder.type,
+            config.scorer.type,
+            suffix="",
+        )
         print(f"Saving jsonl request to {str(DATA_ROOT / config.output_dir / base_path)} ({len(requests)} files)...")
 
         paths = []
@@ -115,7 +127,12 @@ if __name__ == "__main__":
         compared = preference_scorer.compare_batch_2()
         print("Batch file Parsed")
         
-        filename = get_filename("comparison", config.get_preference.builder, config.get_preference.scorer, suffix=".jsonl")
+        filename = get_filename(
+            "comparison",
+            config.builder.type,
+            config.scorer.type,
+            suffix=".jsonl",
+        )
         output_path = DATA_ROOT / config.output_dir / filename
         
         print(f"Saving result to {str(output_path)}...")
