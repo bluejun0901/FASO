@@ -11,6 +11,9 @@ import random
 import time
 
 import json
+from tqdm import tqdm
+
+from queue import Queue
 
 from omegaconf import OmegaConf
 T = TypeVar("T")
@@ -157,6 +160,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.max_retries = getattr(c, "max_retries", 5) if c is not None else 5
         self.initial_backoff = getattr(c, "initial_backoff", 1.0) if c is not None else 1.0
         self.poll_interval = getattr(c, "poll_interval", 15.0) if c is not None else 15.0
+        self.max_request_size = getattr(c, "max_request_per_batch", 30000) if c is not None else 30000
 
         self.paths = []
         self.batch_files = []
@@ -164,17 +168,16 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.total = 0
 
         self.pairs = []
-
     
     def require_ref(self):
         return self.require_ref_flag
-    
-    def compare_batch_0(self, pairs: Union[list[dict], Dataset], request_size=30000) -> list[list[dict]]:
+
+    def compare_batch_0(self, pairs: Union[list[dict], Dataset]) -> list[list[dict]]:
         requests = []
         self.total = len(pairs)
         for i, pair in enumerate(pairs):
             self.pairs.append(pair)
-            if i % request_size == 0:
+            if i % self.max_request_size == 0:
                 requests.append([])
 
             prompt = pair['prompt'] # type: ignore
@@ -189,7 +192,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                     "effort": "minimal"
                 }
             }
-            requests[i // request_size].append({
+            requests[i // self.max_request_size].append({
                 "custom_id": f"{i}",
                 "method": "POST",
                 "url": "/v1/responses",
@@ -209,7 +212,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 time.sleep(delay + random.random() * 0.25 * delay)
                 delay *= 2
 
-    def _submit_one(self, path: str) -> Batch:
+    def _submit_one(self, path: str) -> tuple[int, Batch]:
         with open(path, "rb") as f:
             batch_file = self._retry(self.client.files.create, file=f, purpose="batch")
         batch = self._retry(
@@ -220,13 +223,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         )
         self.batch_files.append(batch_file)
         self.batchs.append(batch)
-        print(f"file {path} (file id: {batch_file.id}) submitted (batch id: {batch.id})")
-        return batch
+        tqdm.write(f"file {path} (file id: {batch_file.id}) submitted (batch id: {batch.id})")
+        return (1, batch)
 
     def compare_batch_1(self, paths: list[str], max_concurrent: int | None = None) -> dict:
         pending = list(paths)
         in_flight: dict[str, Batch] = {}
         finished: list[Batch] = []
+        can_add_batch = True
 
         count = {
             "completed": 0,
@@ -239,45 +243,81 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             max_concurrent = self.max_concurrent
         assert max_concurrent is not None
 
-        while pending and len(in_flight) < max_concurrent:
-            b = self._submit_one(pending.pop(0))
-            in_flight[b.id] = b
+        pbar_total = self.total if self.total is not None else 0
+        pbar = tqdm(total=pbar_total, desc="Batch progress", unit="req")
 
-        while pending or in_flight:
-            time.sleep(self.poll_interval)
-
-            to_delete = []
-            for batch_id in list(in_flight.keys()):
-                b = self._retry(self.client.batches.retrieve, batch_id)
-
-                if b.status in ("completed", "failed", "expired", "canceled"):
-                    to_delete.append(batch_id)
-                    finished.append(b)
-                    if b.status in count:
-                        count[b.status] += 1
-                    else:
-                        count[b.status] = 1
-                    print(f"{batch_id} {b.status}")
-
-            for bid in to_delete:
-                in_flight.pop(bid, None)
-
-            agg_counts = {"total": 0, "completed": 0, "failed": 0}
-            agg_counts["total"] = self.total
-            for _b in list(in_flight.values()) + finished:
-                rc = getattr(_b, "request_counts", None)
-                if rc:
-                    agg_counts["completed"] += rc.completed
-                    agg_counts["failed"] += rc.failed
-
-            if agg_counts["total"] >= 0:
-                gprog = int(50 * agg_counts["completed"] / agg_counts["total"])
-                gbar = "[" + "#" * gprog + "-" * (50 - gprog) + "]"
-                print(f"ALL progress: {gbar} {agg_counts['completed']}/{agg_counts['total']} ", f"(failed: {agg_counts['failed']})")
-
-            while pending and len(in_flight) < max_concurrent:
-                b = self._submit_one(pending.pop(0))
+        while can_add_batch and pending and len(in_flight) < max_concurrent:
+            submit = pending.pop(0)
+            b = self._submit_one(submit)[1]
+            while b.status in ("validating",):
+                time.sleep(self.poll_interval)
+                b = self._retry(self.client.batches.retrieve, b.id)
+            if b.status == "failed":
+                pending.append(submit)
+                if in_flight:
+                    can_add_batch = False
+            else:
                 in_flight[b.id] = b
+
+        last_completed = 0
+        try:
+            while pending or in_flight:
+                time.sleep(self.poll_interval)
+
+                to_delete = []
+                for batch_id in list(in_flight.keys()):
+                    b = self._retry(self.client.batches.retrieve, batch_id)
+                    in_flight[batch_id] = b
+
+                    if b.status in ("completed", "failed", "expired", "canceled"):
+                        to_delete.append(batch_id)
+                        finished.append(b)
+                        if b.status == "completed":
+                            can_add_batch = True
+                        if b.status in count:
+                            count[b.status] += 1
+                        else:
+                            count[b.status] = 1
+                        tqdm.write(f"{batch_id} {b.status}")
+
+                for bid in to_delete:
+                    in_flight.pop(bid, None)
+
+                agg_counts = {"total": 0, "completed": 0, "failed": 0}
+                agg_counts["total"] = self.total
+                for _b in list(in_flight.values()) + finished:
+                    rc = _b.request_counts
+                    if rc:
+                        agg_counts["completed"] += rc.completed
+                        agg_counts["failed"] += rc.failed
+
+                if agg_counts["total"] > 0:
+                    delta = agg_counts["completed"] - last_completed
+                    if delta > 0:
+                        pbar.update(delta)
+                        last_completed += delta
+                    pbar.set_postfix({
+                        "failed": agg_counts["failed"],
+                        "running": len(in_flight),
+                        "finished": len(finished),
+                    })
+
+                while can_add_batch and pending and len(in_flight) < max_concurrent:
+                    submit = pending.pop(0)
+                    b = self._submit_one(submit)[1]
+                    while b.status in ("validating",):
+                        time.sleep(self.poll_interval)
+                        b = self._retry(self.client.batches.retrieve, b.id)
+                    if b.status == "failed":
+                        pending.append(submit)
+                        if in_flight:
+                            can_add_batch = False
+                    else:
+                        in_flight[b.id] = b
+                        pending.pop(0)
+
+        finally:
+            pbar.close()
 
         by_id = {b.id: b for b in self.batchs}
         for b in finished:
@@ -288,13 +328,12 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
     def _parse_output_line(self, line: str) -> tuple[int, int | None]:
         obj = json.loads(line)
-        idx = int(obj["custom_id"])  # came from compare_batch_0
+        idx = int(obj.get("custom_id"))  # came from compare_batch_0
         body = obj.get("response", {}).get("body", {})
-        choices = body.get("choices", [])
-        if not choices:
+        output = body.get("output", [])[1].get("content", "")[0]
+        if not output:
             return idx, None
-        msg = choices[0].get("message", {})
-        output_text = msg.get("content", "")
+        output_text = output.get("text", "")
         match = re.search(self.pattern, output_text)
         if not match:
             return idx, None

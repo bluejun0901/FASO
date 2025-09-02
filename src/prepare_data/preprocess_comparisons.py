@@ -60,6 +60,7 @@ if __name__ == "__main__":
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
     
+    # TODO: Match code with updated OpenAIBAtchPreferenceScorer
     if is_preference_two_step(config.scorer) == False:
         print("Labeling data...")
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
@@ -83,7 +84,6 @@ if __name__ == "__main__":
                 line = json.dumps({"id": pair["meta"], "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
         print("Saved successfully.")
-
 
     else:
         print("Creating jsonl file for request...")
