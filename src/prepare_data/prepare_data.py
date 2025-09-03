@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import argparse
 load_dotenv()
 
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
@@ -27,7 +28,25 @@ from preference_scorers import *
 from preference_builders import *
     
 if __name__ == "__main__":
-    config = OmegaConf.load(CONFIG_ROOT / input("input configuration path: "))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "config_path", 
+        type=str, 
+        help="reletive path to configuration file"
+    )
+    parser.add_argument(
+        "gen_filename",
+        type=str,
+        help="reletive path to generation file"
+    )
+    parser.add_argument(
+        "comp_filename",
+        type=str,
+        help="reletive to reference comparison file"
+    )
+    args = parser.parse_args()
+
+    config = OmegaConf.load(CONFIG_ROOT / args.config_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY")
@@ -36,15 +55,15 @@ if __name__ == "__main__":
     model_path = MODEL_ROOT / config.model_name
     dataset_path = DATA_ROOT / config.dataset_name
 
-    gen_filename = input("input generated filename: ")
-    gen_output_path = DATA_ROOT / config.output_dir / gen_filename
+    gen_filename = args.gen_filename
+    gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Loading generated ouputs from {str(gen_output_path)}...")
     with open(gen_output_path, "r", encoding="utf-8") as f:
         dataset = json.load(f)
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
     
-    comparison_file = DATA_ROOT / config.output_dir / input("input comparison filename: ")
+    comparison_file = DATA_ROOT / config.dataset_output_dir / args.comp_filename
 
     preference_scorer = CachedPreferenceScorer(str(comparison_file))
     preference_builder = get_preference_builder(config.builder, preference_scorer)
@@ -60,7 +79,7 @@ if __name__ == "__main__":
         config.scorer.type,
         suffix=".json",
     )
-    output_path = DATA_ROOT / config.output_dir / filename
+    output_path = DATA_ROOT / config.dataset_output_dir / filename
     
     print(f"Saving result to {str(output_path)}...")
     output_path.parent.mkdir(parents=True, exist_ok=True)

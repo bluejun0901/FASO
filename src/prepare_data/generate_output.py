@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import argparse
 load_dotenv()
 
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
@@ -26,7 +27,15 @@ from omegaconf import OmegaConf
 from summary_generator import *
     
 if __name__ == "__main__":
-    config = OmegaConf.load(CONFIG_ROOT / input("input configuration path: "))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "config_path", 
+        type=str, 
+        help="reletive path to configuration file"
+    )
+    args = parser.parse_args()
+
+    config = OmegaConf.load(CONFIG_ROOT / args.config_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model_path = MODEL_ROOT / config.model_name
@@ -50,7 +59,7 @@ if __name__ == "__main__":
     print("Summaries generated successfully.")
 
     gen_filename = get_filename("generated", config.builder.type, config.scorer.type, suffix=".json")
-    gen_output_path = DATA_ROOT / config.output_dir / gen_filename
+    gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Saving generated summeries to {str(gen_output_path)}...")
     gen_output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(str(gen_output_path), 'w', encoding="utf-8") as f:

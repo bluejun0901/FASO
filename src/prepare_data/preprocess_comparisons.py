@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import argparse
 load_dotenv()
 
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
@@ -46,21 +47,33 @@ def generate_comparisons(dataset: Dataset, scorer: PreferenceScorer) -> list[dic
     return pairs
     
 if __name__ == "__main__":
-    config = OmegaConf.load(CONFIG_ROOT / input("input configuration path: "))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "config_path", 
+        type=str, 
+        help="reletive path to configuration file"
+    )
+    parser.add_argument(
+        "gen_filename", 
+        type=str, 
+        help="reletive path to generation filename"
+    )
+    args = parser.parse_args()
+
+    config = OmegaConf.load(CONFIG_ROOT / args.config_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     client = OpenAI(
         api_key=os.getenv("OPENAI_API_KEY")
     )
 
-    gen_filename = input("input generation filename: ")
-    gen_output_path = DATA_ROOT / config.output_dir / gen_filename
+    gen_filename = args.gen_filename
+    gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Loading generated ouputs from {str(gen_output_path)}...")
     with open(gen_output_path, "r", encoding="utf-8") as f:
         dataset = json.load(f)
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
-    
-    # TODO: Match code with updated OpenAIBAtchPreferenceScorer
+
     if is_preference_two_step(config.scorer) == False:
         print("Labeling data...")
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
@@ -75,7 +88,7 @@ if __name__ == "__main__":
             config.scorer.type,
             suffix=".jsonl",
         )
-        output_path = DATA_ROOT / config.output_dir / filename
+        output_path = DATA_ROOT / config.dataset_output_dir / filename
         
         print(f"Saving result to {str(output_path)}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,7 +112,7 @@ if __name__ == "__main__":
             config.scorer.type,
             suffix="",
         )
-        print(f"Saving jsonl request to {str(DATA_ROOT / config.output_dir / base_path)} ({len(requests)} files)...")
+        print(f"Saving jsonl request to {str(DATA_ROOT / config.dataset_output_dir / base_path)} ({len(requests)} files)...")
 
         paths = []
         for i, request in enumerate(requests):
@@ -107,7 +120,7 @@ if __name__ == "__main__":
                 str(i).zfill(len(str(len(requests) - 1))),
                 suffix=".jsonl"
             )
-            request_output_path = DATA_ROOT / config.output_dir / base_path / request_filename
+            request_output_path = DATA_ROOT / config.dataset_output_dir / base_path / request_filename
 
             paths.append(str(request_output_path))
             request_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +146,7 @@ if __name__ == "__main__":
             config.scorer.type,
             suffix=".jsonl",
         )
-        output_path = DATA_ROOT / config.output_dir / filename
+        output_path = DATA_ROOT / config.dataset_output_dir / filename
         
         print(f"Saving result to {str(output_path)}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -190,7 +190,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 "input": user_prompt,
                 "reasoning": {
                     "effort": "minimal"
-                }
+                },
+                "max_output_tokens": 128
             }
             requests[i // self.max_request_size].append({
                 "custom_id": f"{i}",
@@ -228,6 +229,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
     def compare_batch_1(self, paths: list[str], max_concurrent: int | None = None) -> dict:
         pending = list(paths)
+        random.shuffle(pending)
         in_flight: dict[str, Batch] = {}
         finished: list[Batch] = []
         can_add_batch = True
