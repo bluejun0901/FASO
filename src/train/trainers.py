@@ -1,11 +1,7 @@
 from abc import ABC, abstractmethod
 
 import torch
-from transformers import AutoTokenizer
-from transformers.trainer_callback import TrainerCallback
 from trl import AutoModelForCausalLMWithValueHead, DPOTrainer, DPOConfig
-
-from torch.utils.tensorboard.writer import SummaryWriter
 
 from datasets import Dataset
 from omegaconf import OmegaConf
@@ -13,7 +9,7 @@ from typing import Any
 
 from utils.utility import *
 
-class mTrainer:
+class mTrainer(ABC):
     @abstractmethod
     def preprocess(self, dataset: Dataset | list[dict[str, str]]) -> Dataset:
         pass

@@ -64,7 +64,11 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         return self.require_ref_flag
                       
     def compare(self, prompt: str, y1: str, y2: str, ref: str="") -> int | None:
-        user_prompt = self.prompt_template.format(article=prompt, summary1=y1, summary2=y2)
+        # Randomize which response is shown first to the judge
+        swapped = random.choice([False, True])
+        first = y2 if swapped else y1
+        second = y1 if swapped else y2
+        user_prompt = self.prompt_template.format(article=prompt, summary1=first, summary2=second)
 
         response = self.client.responses.create(
             model=self.model_name,
@@ -76,8 +80,10 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         match = re.search(self.pattern, output_text)
         if not match:
             return None
-        # '1' means y1 chosen -> 0, '2' means y2 chosen -> 1
-        return 0 if match.group(1) == "1" else 1
+        # '1' means first shown, '2' means second shown
+        judged_idx = 0 if match.group(1) == "1" else 1
+        # Map back to original (y1=0, y2=1)
+        return (1 - judged_idx) if swapped else judged_idx
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
@@ -168,6 +174,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.total = 0
 
         self.pairs = []
+        # Track whether each pair's responses were swapped when sent to the judge
+        self.swapped: list[bool] = []
     
     def require_ref(self):
         return self.require_ref_flag
@@ -181,8 +189,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 requests.append([])
 
             prompt = pair['prompt'] # type: ignore
-            summary1 = pair['y1'] # type: ignore
-            summary2 = pair['y2'] # type: ignore
+            y1 = pair['y1'] # type: ignore
+            y2 = pair['y2'] # type: ignore
+
+            # Randomize presentation order per pair and record mapping
+            swapped = random.choice([False, True])
+            self.swapped.append(swapped)
+            summary1 = y2 if swapped else y1
+            summary2 = y1 if swapped else y2
 
             user_prompt = self.prompt_template.format(article=prompt, summary1=summary1, summary2=summary2)
             body = {
@@ -339,8 +353,12 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         match = re.search(self.pattern, output_text)
         if not match:
             return idx, None
-        # Map '1' -> 0 (y1), '2' -> 1 (y2)
-        return idx, (0 if match.group(1) == "1" else 1)
+        # Map '1' -> 0 (first shown), '2' -> 1 (second shown)
+        judged_idx = 0 if match.group(1) == "1" else 1
+        # Convert back to original y1/y2 indexing using recorded swap info
+        swapped = self.swapped[idx] if 0 <= idx < len(self.swapped) else False
+        orig_idx = (1 - judged_idx) if swapped else judged_idx
+        return idx, orig_idx
     
     def compare_batch_2(self) -> list[int | None]:
         result: list[int | None] = [None for _ in range(len(self.pairs))]
