@@ -6,6 +6,8 @@ col_renames:
   highlights: reference
 
 dataset_output_dir: preprocessed
+model_output_dir: experiment1
+log_dir: experiment1
 
 generation:
   prompt: |
@@ -59,3 +61,18 @@ trainer:
     num_train_epochs: 1.0
     save_steps: 4000
     save_total_limit: 20
+
+validatoin:
+  nrow: 3000
+  scorer:
+    type: rouge
+    rouge:
+      type: rougeL
+  generation:
+    prompt: |
+      {article}
+      TL;DR:
+    max_new_tokens: 128
+    temperature: 0.3
+    top_p: 0.9
+    top_k: 50
