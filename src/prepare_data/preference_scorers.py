@@ -13,8 +13,6 @@ import time
 import json
 from tqdm import tqdm
 
-from queue import Queue
-
 from omegaconf import OmegaConf
 T = TypeVar("T")
 
@@ -208,7 +206,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 "max_output_tokens": 128
             }
             requests[i // self.max_request_size].append({
-                "custom_id": f"{i}",
+                "custom_id": f"{i} {swapped}",
                 "method": "POST",
                 "url": "/v1/responses",
                 "body": body
@@ -242,9 +240,13 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         return (1, batch)
 
     def compare_batch_1(self, paths: list[str], max_concurrent: int | None = None) -> dict:
+        # Track paths and attempts so we can resubmit failed batches
+        self.paths = list(paths)
         pending = list(paths)
         random.shuffle(pending)
         in_flight: dict[str, Batch] = {}
+        batch_to_path: dict[str, str] = {}
+        attempts: dict[str, int] = {}
         finished: list[Batch] = []
         can_add_batch = True
 
@@ -264,16 +266,20 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         while can_add_batch and pending and len(in_flight) < max_concurrent:
             submit = pending.pop(0)
+            attempts[submit] = attempts.get(submit, 0) + 1
             b = self._submit_one(submit)[1]
             while b.status in ("validating",):
                 time.sleep(self.poll_interval)
                 b = self._retry(self.client.batches.retrieve, b.id)
-            if b.status == "failed":
-                pending.append(submit)
+            if b.status in ("failed", "expired", "canceled"):
+                # Requeue if attempts remain, otherwise count as final failure state
+                if attempts[submit] < self.max_retries:
+                    pending.append(submit)
                 if in_flight:
                     can_add_batch = False
             else:
                 in_flight[b.id] = b
+                batch_to_path[b.id] = submit
 
         last_completed = 0
         try:
@@ -289,6 +295,16 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                         to_delete.append(batch_id)
                         finished.append(b)
                         if b.status == "completed":
+                            can_add_batch = True
+                            # completed increments below via request_counts
+                        else:
+                            # For terminal error states, attempt resubmission
+                            path = batch_to_path.get(batch_id)
+                            if path is not None:
+                                if attempts.get(path, 0) < self.max_retries:
+                                    attempts[path] = attempts.get(path, 0) + 1
+                                    pending.append(path)
+                                # Keep count of terminal statuses regardless
                             can_add_batch = True
                         if b.status in count:
                             count[b.status] += 1
@@ -320,17 +336,20 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
                 while can_add_batch and pending and len(in_flight) < max_concurrent:
                     submit = pending.pop(0)
+                    attempts[submit] = attempts.get(submit, 0) + 1
                     b = self._submit_one(submit)[1]
                     while b.status in ("validating",):
                         time.sleep(self.poll_interval)
                         b = self._retry(self.client.batches.retrieve, b.id)
-                    if b.status == "failed":
-                        pending.append(submit)
+                    if b.status in ("failed", "expired", "canceled"):
+                        # Requeue if attempts remain
+                        if attempts[submit] < self.max_retries:
+                            pending.append(submit)
                         if in_flight:
                             can_add_batch = False
                     else:
                         in_flight[b.id] = b
-                        pending.pop(0)
+                        batch_to_path[b.id] = submit
 
         finally:
             pbar.close()
@@ -344,7 +363,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
     def _parse_output_line(self, line: str) -> tuple[int, int | None]:
         obj = json.loads(line)
-        idx = int(obj.get("custom_id"))  # came from compare_batch_0
+        idx = int(obj.get("custom_id").split()[0])  # came from compare_batch_0
         body = obj.get("response", {}).get("body", {})
         output = body.get("output", [])[1].get("content", "")[0]
         if not output:

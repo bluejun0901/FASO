@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoTokenizer, TrainerCallback
+from transformers import AutoTokenizer
+from transformers.trainer_callback import TrainerCallback
 from trl import AutoModelForCausalLMWithValueHead, DPOTrainer, DPOConfig
 from huggingface_hub import login
 
@@ -9,7 +10,7 @@ from difflib import SequenceMatcher
 from datasets import Dataset
 import pandas as pd
 
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 
 import os
 import json
@@ -18,9 +19,9 @@ from pathlib import Path
 
 load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve()
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve() # type: ignore
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -106,8 +107,8 @@ def prepare_raw_data(model: AutoModelForCausalLMWithValueHead,
     model.eval()
     with torch.no_grad():
         for data in dataset:
-            prompt = data['content']
-            answer = data['answer']
+            prompt = data['content'] # type: ignore
+            answer = data['answer'] # type: ignore
             response_a = get_summery_from_model(model, tokenizer, prompt)
             response_b = get_summery_from_model(model, tokenizer, prompt)
             raw_data.append({
@@ -159,7 +160,7 @@ def get_preference_from_gpt(prompt: str,
         ],
         temperature=0
     )
-    content = completion.choices[0].message.content.strip().upper()
+    content = completion.choices[0].message.content.strip().upper() # type: ignore
     return "A" if "A" in content else "B"
 
 def get_preference_by_similarity(response_a: str, 
@@ -247,7 +248,7 @@ def compute_win_rate(model: AutoModelForCausalLMWithValueHead,
             rejected = item["rejected"]
             
             def get_logprob(text):
-                inputs = tokenizer(prompt + text, return_tensors="pt").to(device)
+                inputs = tokenizer(prompt + text, return_tensors="pt").to(device) # type: ignore
                 outputs = model(**inputs, labels=inputs["input_ids"])
                 # Use the loss returned by the model as the negative log-likelihood
                 return -outputs.loss.item()

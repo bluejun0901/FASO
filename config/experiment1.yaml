@@ -24,11 +24,11 @@ scorer:
   openai:
     type: batch
     batch:
-      max_request_per_batch: 1500
-      max_concurrent: 7
-      max_retries: 2
+      max_request_per_batch: 2000
+      max_concurrent: 20
+      max_retries: 15
       initial_backoff: 1.0
-      poll_interval: 30.0
+      poll_interval: 20.0
     model: gpt-5-mini
     prompt: |
       Which of the following summaries does a better job of summarizing the most important points in the given article, without including unimportant or irrelevant details? A good summary is both precise and concise.

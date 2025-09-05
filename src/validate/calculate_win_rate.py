@@ -20,7 +20,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from datasets import Dataset
 import pandas as pd
-import json
 from utils.utility import *
 
 from omegaconf import OmegaConf

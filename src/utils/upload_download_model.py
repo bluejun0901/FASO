@@ -7,7 +7,7 @@ load_dotenv()
 
 def upload_model_to_huggingface(model_path: str, 
                                 repo_id: str, 
-                                token: str=None):
+                                token: str | None=None):
     """
     Uploads a model to Hugging Face Hub.
     
@@ -32,7 +32,7 @@ def upload_model_to_huggingface(model_path: str,
 def upload_specific_folder_to_huggingface(repo_id: str,
                                           local_dir: str,
                                           path_in_repo: str,
-                                          token: str=None):
+                                          token: str | None=None):
     if token is None:
         token = HfFolder.get_token()
     
@@ -49,7 +49,7 @@ def upload_specific_folder_to_huggingface(repo_id: str,
 
 def download_model_from_huggingface(repo_id: str,
                                     model_path: str,
-                                    token: str=None):
+                                    token: str | None=None):
     """
     Downloads a model from Hugging Face Hub.
     
@@ -73,7 +73,7 @@ def download_model_from_huggingface(repo_id: str,
 def download_specific_folder_from_huggingface(repo_id: str,
                                                folder_name: str,
                                                local_dir: str,
-                                               token: str=None):
+                                               token: str | None=None):
     """
     Downloads a specific folder from a model repository on Hugging Face Hub.
     
@@ -97,7 +97,7 @@ def download_specific_folder_from_huggingface(repo_id: str,
     )
     
 if __name__ == "__main__":
-    model_path = Path(os.getenv("MODEL_ROOT")).resolve()
+    model_path = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
 
     token = os.getenv("HF_TOKEN") or HfFolder.get_token()
 

@@ -2,9 +2,10 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 import torch
-from transformers import AutoTokenizer, TrainerCallback
+from transformers import AutoTokenizer
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import TrainingArguments, Trainer
+from transformers.trainer import Trainer
+from transformers.training_args import TrainingArguments
 from huggingface_hub import login
 
 from datasets import Dataset
@@ -16,9 +17,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve()
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve() # type: ignore
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -31,7 +32,7 @@ def process_one_data(data: dict,
         tokenize=False,
     )
 
-    tokenized = tokenizer(
+    tokenized = tokenizer( # type: ignore
         full_text,
         truncation=True,
         padding="max_length",
@@ -42,7 +43,7 @@ def process_one_data(data: dict,
         [{"role": "user", "content": prompt}],
         tokenize=False,
     )
-    prompt_len = len(tokenizer(prompt_only, truncation=True, max_length=512)["input_ids"])
+    prompt_len = len(tokenizer(prompt_only, truncation=True, max_length=512)["input_ids"]) # type: ignore
 
     labels = tokenized["input_ids"].copy()
     labels[:prompt_len] = [-100] * prompt_len
@@ -103,7 +104,7 @@ if __name__ == "__main__":
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer
+        tokenizer=tokenizer # type: ignore
     )
 
     print("starting training")

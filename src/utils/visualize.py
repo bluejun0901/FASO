@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()  # type: ignore
 
 # get the path to the TensorBoard log directory
 log_dir = Path(input("enter path: "))

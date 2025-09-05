@@ -17,10 +17,7 @@ sys.path.append(str(SRC_ROOT))
 
 import torch
 from transformers import AutoTokenizer
-from transformers.trainer_callback import TrainerCallback
-from trl import AutoModelForCausalLMWithValueHead, DPOTrainer, DPOConfig
-
-from torch.utils.tensorboard.writer import SummaryWriter
+from trl import AutoModelForCausalLMWithValueHead
 
 from datasets import Dataset
 import json

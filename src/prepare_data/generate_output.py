@@ -24,7 +24,7 @@ from utils.utility import *
 
 from omegaconf import OmegaConf
 
-from summary_generator import *
+from prepare_data.summary_generator import *
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
