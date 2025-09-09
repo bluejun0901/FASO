@@ -70,9 +70,13 @@ class OpenAIPreferenceScorer(PreferenceScorer):
 
         response = self.client.responses.create(
             model=self.model_name,
-            input=user_prompt
+            input=user_prompt,
+            reasoning={
+                "effort": "minimal"
+            },
+            max_output_tokens=128
         )
-        output_text = response.choices[0].message.content
+        output_text = response.output[1].content[0].text
         assert output_text is not None
 
         match = re.search(self.pattern, output_text)
@@ -85,7 +89,7 @@ class OpenAIPreferenceScorer(PreferenceScorer):
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
-        for pair in pairs:
+        for pair in tqdm(pairs, desc="Comparing"):
             compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'])) #type: ignore
         return compared
     

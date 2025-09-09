@@ -22,7 +22,7 @@ generation:
 scorer:
   type: openai
   openai:
-    type: batch
+    type: realtime
     batch:
       max_request_per_batch: 2000
       max_concurrent: 20

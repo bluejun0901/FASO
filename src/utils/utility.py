@@ -100,6 +100,9 @@ def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
 
     return out_adj
 
+# 완전탐색으로 하기
+# 그
+
 def add_transitive_edges(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)
 

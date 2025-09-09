@@ -58,6 +58,11 @@ if __name__ == "__main__":
         type=str, 
         help="reletive path to generation filename"
     )
+    parser.add_argument(
+        "--cached",
+        "-o",
+        help="reletive path to partially processed pairs",
+        default="None")
     args = parser.parse_args()
 
     config = OmegaConf.load(CONFIG_ROOT / args.config_path)
@@ -74,14 +79,7 @@ if __name__ == "__main__":
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
 
-    if is_preference_two_step(config.scorer) == False:
-        print("Labeling data...")
-        preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
-        
-        comparisons = generate_comparisons(dataset, preference_scorer)
-        compared = preference_scorer.compare_batch(comparisons)
-        print("Labeled successfully.")
-        
+    if args.cached == "None":
         filename = get_filename(
             "comparison",
             config.builder.type,
@@ -89,12 +87,41 @@ if __name__ == "__main__":
             suffix=".jsonl",
         )
         output_path = DATA_ROOT / config.dataset_output_dir / filename
-        
-        print(f"Saving result to {str(output_path)}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(str(output_path), "w", encoding="utf-8") as f:
+        output_path = str(output_path)
+        with open(output_path, "w", encoding="utf-8") as f:
+            pass
+    else:
+        output_path = str(DATA_ROOT / config.dataset_output_dir / args.cached)
+
+    cache = {}
+    with open(output_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            key = str(obj["id"])
+            val = obj["result"]
+            if val != 'None' and val is not None:
+                cache[key] = int(val)
+
+    if is_preference_two_step(config.scorer) == False:
+        print("Labeling data...")
+        preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
+        
+        comparisons = generate_comparisons(dataset, preference_scorer)
+        comparisons = [comparison for comparison in comparisons if comparison['meta'] not in cache]
+        compared = preference_scorer.compare_batch(comparisons)
+        print("Labeled successfully.")
+        
+        print(f"Saving result to {output_path}...")
+        with open(output_path, "w", encoding="utf-8") as f:
             for pair, compare in zip(comparisons, compared):
-                line = json.dumps({"id": pair["meta"], "result": compare}, ensure_ascii=False)
+                line = json.dumps({"id": pair['meta'], "result": compare}, ensure_ascii=False)
+                f.write(line + "\n")
+            for pair, compare in cache.items():
+                line = json.dumps({"id": pair, "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
         print("Saved successfully.")
 
@@ -103,6 +130,7 @@ if __name__ == "__main__":
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
 
         comparisons = generate_comparisons(dataset, preference_scorer)
+        comparisons = [comparison for comparison in comparisons if comparison['meta'] not in cache]
         requests = preference_scorer.compare_batch_0(comparisons)
         print("jsonl file created")
 
@@ -152,6 +180,9 @@ if __name__ == "__main__":
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(str(output_path), "w", encoding="utf-8") as f:
             for pair, compare in zip(comparisons, compared):
-                line = json.dumps({"id": pair["meta"], "result": compare}, ensure_ascii=False)
+                line = json.dumps({"id": pair['meta'], "result": compare}, ensure_ascii=False)
+                f.write(line + "\n")
+            for pair, compare in cache.items():
+                line = json.dumps({"id": pair, "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
         print("Saved successfully.")
