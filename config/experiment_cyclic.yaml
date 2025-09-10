@@ -55,8 +55,8 @@ trainer:
 
   dpo:
     logging_steps: 20
-    per_device_train_batch_size: 4
-    gradient_accumulation_steps: 4
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 8
     fp16: True
     num_train_epochs: 1.0
     save_steps: 4000

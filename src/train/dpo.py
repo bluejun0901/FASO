@@ -12,7 +12,7 @@ CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 sys.path.append(str(SRC_ROOT))
 
 import torch
@@ -58,12 +58,19 @@ if __name__ == "__main__":
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
 
+    print("Creating trainer...")
     trainer = get_m_trainer(config.trainer, tokenizer, model)
+    print("Trainer created")
 
     output_dir = MODEL_ROOT / config.model_output_dir / get_filename(config.builder.type, config.scorer.type, config.trainer.type, suffix="")
     output_dir.mkdir(parents=True, exist_ok=True)
     log_dir = LOG_ROOT / config.log_dir / get_filename(config.builder.type, config.scorer.type, config.trainer.type, suffix="")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
+    print("Preprocessing data...")
     trainer.preprocess(dataset)
+    print("Data preprocessed")
+
+    print("Training...")
     trainer.train(str(output_dir), str(log_dir))
+    print("Finished")

@@ -54,27 +54,6 @@ class CyclicPreferenceBuilder(PreferenceBuilder):
             })
         return Dataset.from_list(result)
 
-# 순위 DPO [선행연구]
-class RankPreferenceBuilder(PreferenceBuilder):
-    """
-    Builds pairwise data per Ranking-DPO prior work.
-    """
-    def __init__(self, scorer):
-        self.scorer = scorer
-        self.pairs: list[dict] = []
-
-    def generate_comparisons(self, dataset: Dataset) -> list[dict]:
-        """
-        TODO: Implement ranking-based pair creation for DPO baseline.
-        """
-        raise NotImplementedError("RankDPOPreferenceBuilder.generate_comparisons is not implemented yet.")
-
-    def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
-        """
-        TODO: Map comparison results to DPO (prompt, chosen, rejected).
-        """
-        raise NotImplementedError("RankDPOPreferenceBuilder.build_with_comparisons is not implemented yet.")
-
 # 사이클 X, 추론 X, DPO
 class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
     """
@@ -267,10 +246,8 @@ def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> Prefe
     name = config.type.lower()
     if name == "cyclic":
         return CyclicPreferenceBuilder(scorer)
-    if name == "rank":
-        return RankPreferenceBuilder(scorer)
     if name == "acyclic_no_reason":
-        return AcyclicNoReasonPreferenceBuilder(config, scorer)
+        return AcyclicNoReasonPreferenceBuilder(config.acyclic_no_reason, scorer)
     if name == "acyclic_reason":
         return AcyclicReasonPreferenceBuilder(scorer)
     if name == "cyclic_modified_prob":

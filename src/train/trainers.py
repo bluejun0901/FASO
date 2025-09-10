@@ -61,7 +61,7 @@ class mDPOTrainer(mTrainer):
 
 def get_m_trainer(config: OmegaConf,
                   tokenizer: Any,
-                  model: AutoModelForCausalLMWithValueHead,) -> mTrainer:
+                  model: AutoModelForCausalLMWithValueHead) -> mTrainer:
     name = config.type.lower()
     if name == "dpo":
         return mDPOTrainer(tokenizer, model, config.dpo)

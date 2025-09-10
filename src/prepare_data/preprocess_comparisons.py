@@ -106,7 +106,7 @@ if __name__ == "__main__":
             if val != 'None' and val is not None:
                 cache[key] = int(val)
 
-    if is_preference_two_step(config.scorer) == False:
+    if not is_preference_two_step(config.scorer):
         print("Labeling data...")
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
         

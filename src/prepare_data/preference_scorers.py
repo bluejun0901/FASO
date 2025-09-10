@@ -76,7 +76,7 @@ class OpenAIPreferenceScorer(PreferenceScorer):
             },
             max_output_tokens=128
         )
-        output_text = response.output[1].content[0].text
+        output_text = response.output[1].content[0].text #type: ignore
         assert output_text is not None
 
         match = re.search(self.pattern, output_text)
