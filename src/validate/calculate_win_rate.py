@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
@@ -13,20 +12,20 @@ CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
-sys.path.append(str(SRC_ROOT))
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from datasets import Dataset
 import pandas as pd
-from utils.utility import *
+from openai import OpenAI
+from src.utils.utility import *
 
 from omegaconf import OmegaConf
 
-from prepare_data.summary_generator import *
-from prepare_data.preference_scorers import *
-from validate.win_rate_calculator import WinRateCalculator
+from src.prepare_data.summary_generator import *
+from src.prepare_data.preference_scorers import *
+from src.validate.win_rate_calculator import WinRateCalculator
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

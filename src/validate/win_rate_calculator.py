@@ -1,8 +1,8 @@
 from datasets import Dataset
 
-from utils.utility import *
-from prepare_data.preference_scorers import *
-from prepare_data.summary_generator import SummaryGenerator
+from src.utils.utility import *
+from src.prepare_data.preference_scorers import *
+from src.prepare_data.summary_generator import SummaryGenerator
 
 class WinRateCalculator:
     def __init__(self, 

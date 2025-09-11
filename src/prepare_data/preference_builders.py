@@ -3,9 +3,9 @@ from abc import ABC, abstractmethod
 from datasets import Dataset
 from omegaconf import OmegaConf
 
-from preference_scorers import *
+from src.prepare_data.preference_scorers import *
 
-from utils.utility import *
+from src.utils.utility import *
 
 class PreferenceBuilder(ABC):
     @abstractmethod

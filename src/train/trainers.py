@@ -7,7 +7,7 @@ from datasets import Dataset
 from omegaconf import OmegaConf
 from typing import Any
 
-from utils.utility import *
+from src.utils.utility import *
 
 class mTrainer(ABC):
     @abstractmethod

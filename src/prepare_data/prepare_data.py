@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
@@ -12,7 +11,6 @@ CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
-sys.path.append(str(SRC_ROOT))
 
 import torch
 
@@ -20,12 +18,12 @@ from openai import OpenAI
 
 from datasets import Dataset
 import json
-from utils.utility import *
+from src.utils.utility import *
 
 from omegaconf import OmegaConf
 
-from preference_scorers import *
-from preference_builders import *
+from src.prepare_data.preference_scorers import *
+from src.prepare_data.preference_builders import *
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

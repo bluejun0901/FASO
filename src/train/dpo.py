@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
@@ -9,11 +8,9 @@ PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
 MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
 DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
-SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "4"
-sys.path.append(str(SRC_ROOT))
 
 import torch
 from transformers import AutoTokenizer
@@ -21,8 +18,8 @@ from trl import AutoModelForCausalLMWithValueHead
 
 from datasets import Dataset
 import json
-from utils.utility import *
-from trainers import *
+from src.utils.utility import *
+from src.train.trainers import *
 
 from omegaconf import OmegaConf
 
