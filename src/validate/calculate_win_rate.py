@@ -74,8 +74,8 @@ if __name__ == "__main__":
         n = int(n)
 
         print(f"Loading model from {MODEL_ROOT / ref_model_path}...")
-        ref_tokenizer = AutoTokenizer.from_pretrained(MODEL_ROOT / ref_model_path, trust_remote_code=True)
-        ref_model = AutoModelForCausalLM.from_pretrained(MODEL_ROOT / ref_model_path, trust_remote_code=True).to(device)
+        ref_tokenizer = AutoTokenizer.from_pretrained(str(MODEL_ROOT / ref_model_path).strip(), trust_remote_code=True)
+        ref_model = AutoModelForCausalLM.from_pretrained(str(MODEL_ROOT / ref_model_path).strip(), trust_remote_code=True).to(device)
         print("Model loaded successfully.")
 
         ref_summary_generator = SummaryGenerator(ref_tokenizer, ref_model, config.validation.generation)
@@ -85,8 +85,8 @@ if __name__ == "__main__":
             target_model_path = f.readline()
 
             print(f"Loading model from {MODEL_ROOT / target_model_path}...")
-            target_tokenizer = AutoTokenizer.from_pretrained(MODEL_ROOT / target_model_path, trust_remote_code=True)
-            target_model = AutoModelForCausalLM.from_pretrained(MODEL_ROOT / target_model_path, trust_remote_code=True).to(device)
+            target_tokenizer = AutoTokenizer.from_pretrained(str(MODEL_ROOT / target_model_path).strip(), trust_remote_code=True)
+            target_model = AutoModelForCausalLM.from_pretrained(str(MODEL_ROOT / target_model_path).strip(), trust_remote_code=True).to(device)
             print("Model loaded successfully.")
 
             target_summary_generator = SummaryGenerator(target_tokenizer, target_model, config.validation.generation)

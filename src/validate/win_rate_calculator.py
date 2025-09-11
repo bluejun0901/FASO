@@ -28,13 +28,14 @@ class WinRateCalculator:
 
         pairs: list[dict] = []
         for i in range(n):
-            pairs.append({
-                'prompt': prompts[i],
-                'y1': ref_responses[i]['summaries'][0],
-                'y2': target_responses[i]['summaries'][0],
-                'ref': prompts[i]['reference'] if scorer.require_ref() else "",
-                'meta': f"{i}, {i}, {i}"
-            })
+            if len(ref_responses[i]['summaries']) > 0 and len(target_responses[i]['summaries']) > 0:
+                pairs.append({
+                    'prompt': prompts[i],
+                    'y1': ref_responses[i]['summaries'][0],
+                    'y2': target_responses[i]['summaries'][0],
+                    'ref': prompts[i]['reference'] if scorer.require_ref() else "",
+                    'meta': f"{i}, {i}, {i}"
+                })
 
         res = scorer.compare_batch(pairs)
 

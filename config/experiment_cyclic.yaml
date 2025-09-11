@@ -62,7 +62,7 @@ trainer:
     save_steps: 4000
     save_total_limit: 20
 
-validatoin:
+validation:
   nrow: 3000
   scorer:
     type: rouge
@@ -76,3 +76,4 @@ validatoin:
     temperature: 0.3
     top_p: 0.9
     top_k: 50
+    num_return_sequences: 1
