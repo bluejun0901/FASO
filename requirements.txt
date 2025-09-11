@@ -9,3 +9,5 @@ python-dotenv
 omegaconf
 matplotlib
 tensorboard
+rouge-score
+tqdm
