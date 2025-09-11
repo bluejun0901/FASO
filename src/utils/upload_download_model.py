@@ -97,14 +97,14 @@ def download_specific_folder_from_huggingface(repo_id: str,
     )
     
 if __name__ == "__main__":
-    model_path = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
+    model_path = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 
     token = os.getenv("HF_TOKEN") or HfFolder.get_token()
 
     print("Uploading model to Hugging Face...")
     upload_specific_folder_to_huggingface(
         repo_id="bluejun/LLM_DAG_ALLIGN",
-        local_dir=str(model_path / 'finetuned'),
+        local_dir=str(model_path / 'preprocessed'),
         path_in_repo="",
         token=token
     )
