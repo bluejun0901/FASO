@@ -11,7 +11,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -22,10 +22,23 @@ from openai import OpenAI
 from src.utils.utility import *
 
 from omegaconf import OmegaConf
+import json
 
 from src.prepare_data.summary_generator import *
 from src.prepare_data.preference_scorers import *
 from src.validate.win_rate_calculator import WinRateCalculator
+
+def get_summary_generator(model_path: str, generation_config: OmegaConf) -> SummaryGenerator:
+    model_path = model_path.strip()
+    if model_path.lower().endswith("reference"):
+        return ReferenceSummaryGenerator(generation_config)
+    else:
+        print(f"Loading model from {MODEL_ROOT / model_path}...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, local_files_only=True, trust_remote_code=True).to(device)
+        print("Model loaded successfully.")
+        return ModelSummaryGenerator(tokenizer, model, generation_config)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -61,42 +74,54 @@ if __name__ == "__main__":
     print(f"Successfully loaded")
 
     f = open(str(DATA_ROOT / args.pairs_path), "r")
-    out = open(str(DATA_ROOT / args.out_path), "w")
+
+    out_path = DATA_ROOT / args.out_path
+    if out_path.exists():
+        with open(str(out_path), "r") as check:
+            try:
+                existing = json.load(check)
+            except:
+                existing = []
+    else:
+        existing = []
 
     m = int(f.readline())
 
     win_rate_calculator = WinRateCalculator()
+    win_rate_calculator.set_dataset(dataset)
     scorer = get_preference_scorer(config.validation.scorer, client)
 
     for i in range(m):
         ref_model_path, n = f.readline().split()
         n = int(n)
 
-        print(f"Loading model from {MODEL_ROOT / ref_model_path}...")
-        ref_tokenizer = AutoTokenizer.from_pretrained(str(MODEL_ROOT / ref_model_path).strip(), trust_remote_code=True)
-        ref_model = AutoModelForCausalLM.from_pretrained(str(MODEL_ROOT / ref_model_path).strip(), trust_remote_code=True).to(device)
-        print("Model loaded successfully.")
-
-        ref_summary_generator = SummaryGenerator(ref_tokenizer, ref_model, config.validation.generation)
+        ref_summary_generator = get_summary_generator(str(MODEL_ROOT / ref_model_path), config.validation.generation)
         win_rate_calculator.set_ref_generator(ref_summary_generator)
+        win_rate_calculator.ref_generate()
 
         for j in range(n):
             target_model_path = f.readline()
 
-            print(f"Loading model from {MODEL_ROOT / target_model_path}...")
-            target_tokenizer = AutoTokenizer.from_pretrained(str(MODEL_ROOT / target_model_path).strip(), trust_remote_code=True)
-            target_model = AutoModelForCausalLM.from_pretrained(str(MODEL_ROOT / target_model_path).strip(), trust_remote_code=True).to(device)
-            print("Model loaded successfully.")
-
-            target_summary_generator = SummaryGenerator(target_tokenizer, target_model, config.validation.generation)
+            target_summary_generator = get_summary_generator(str(MODEL_ROOT / target_model_path), config.validation.generation)
             win_rate_calculator.set_target_generator(target_summary_generator)
+            win_rate_calculator.target_generate()
 
             print(f"Calculating win rate of pair ({i}, {j})")
             win_rate, _ = win_rate_calculator.calculate_win_rate(dataset, scorer)
             print(f"Calculated successfully")
             
-            out.write(f"{win_rate:.05f} ")
-        out.write("\n")
+            res = {
+                "ref_model": ref_model_path,
+                "target_model": target_model_path,
+                "win_rate": win_rate
+            }
+            for item in existing:
+                if item["ref_model"] == ref_model_path and item["target_model"] == target_model_path:
+                    item.update(res)
+                    break
+            else:
+                existing.append(res)
 
     f.close()
-    out.close()
+    with open(str(out_path), "w") as f:
+        json.dump(existing, f, indent=2)

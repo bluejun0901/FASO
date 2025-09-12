@@ -2,9 +2,20 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import Dataset
 
+from abc import ABC, abstractmethod
+
 from omegaconf import OmegaConf
 
-class SummaryGenerator:
+class SummaryGenerator(ABC):
+    @abstractmethod
+    def generate(self, article: str) -> dict | None:
+        pass
+    
+    @abstractmethod
+    def generate_batch(self, articles: Dataset) -> Dataset:
+        pass
+
+class ModelSummaryGenerator(SummaryGenerator):
     def __init__(self,
                  tokenizer: AutoTokenizer,
                  model: AutoModelForCausalLM,
@@ -56,3 +67,17 @@ class SummaryGenerator:
             return {k: v for k, v in generation.items() if k != 'article'}
         return articles.map(f, num_proc=1, desc="Generating summaries")
     
+class ReferenceSummaryGenerator(SummaryGenerator):
+    def __init__(self,
+                 config: OmegaConf):
+        self.config = config
+        if self.config.num_return_sequences != 1:
+            raise ValueError("ReferenceSummaryGenerator only supports num_return_sequences=1")
+
+    def generate(self, article: str) -> dict | None:
+        raise NotImplementedError("ReferenceSummaryGenerator does not support single generation")
+    
+    def generate_batch(self, articles: Dataset) -> Dataset:
+        def f(example):
+            return {"summaries": [example['reference']], "prompt": "Generated from reference"}
+        return articles.map(f, num_proc=1, desc="Generating summaries")
