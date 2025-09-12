@@ -52,7 +52,7 @@ if __name__ == "__main__":
     dataset = Dataset.from_pandas(df)
     print("Dataset loaded successfully.")
     
-    generator = SummaryGenerator(tokenizer, model, config.generation)
+    generator = ModelSummaryGenerator(tokenizer, model, config.generation)
     dataset = generator.generate_batch(dataset)
     print("Summaries generated successfully.")
 

@@ -141,8 +141,11 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
     """
     Builds a DAG of preferences (cycle-free). Reasoning ON.
     """
-    def __init__(self, scorer):
+    def __init__(self, 
+                 scorer: PreferenceScorer, 
+                 config: OmegaConf):
         self.scorer = scorer
+        self.config = config
         self.pairs: list[dict] = []
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
@@ -249,7 +252,7 @@ def get_preference_builder(config: OmegaConf, scorer: PreferenceScorer) -> Prefe
     if name == "acyclic_no_reason":
         return AcyclicNoReasonPreferenceBuilder(config.acyclic_no_reason, scorer)
     if name == "acyclic_reason":
-        return AcyclicReasonPreferenceBuilder(scorer)
+        return AcyclicReasonPreferenceBuilder(scorer, config.acyclic_reason)
     if name == "cyclic_modified_prob":
         return CyclicModifiedProbPreferenceBuilder(scorer)
     raise Exception(f"Unknown preference builder: {config.type}")

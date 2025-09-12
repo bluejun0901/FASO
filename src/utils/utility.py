@@ -125,13 +125,13 @@ def add_transitive_edges(adj_list: list[list[int]]) -> list[list[int]]:
 
     reach = [set() for _ in range(n)]
 
-    for u in topo:
+    for u in reversed(topo):
         for v in adj_list[u]:
             reach[u].add(v)
             reach[u].update(reach[v])
 
     new_adj = [[] for _ in range(n)]
     for u in range(n):
-        new_adj[u] = sorted(reach[u])  # 정렬해서 반환 (원한다면 set 그대로 둬도 됨)
+        new_adj[u] = sorted(reach[u])
 
     return new_adj

@@ -56,7 +56,7 @@ def save_fig(tag, event_acc, save_path):
     plt.savefig(save_path, dpi=300)
     plt.close()                    # <- 반드시 닫아주기
 
-graph_dir = PROJECT_ROOT / "graphs" / input("input path: ")
+graph_dir = PROJECT_ROOT / input("input path: ")
 os.makedirs(graph_dir, exist_ok=True)
 
 for tag in event_acc.Tags()["scalars"]:
