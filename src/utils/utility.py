@@ -100,8 +100,56 @@ def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
 
     return out_adj
 
-# 완전탐색으로 하기
-# 그
+# naive O(n! * n) implementation
+def remove_cycles_permutation(adj_list: list[list[int]]) -> list[list[int]]:
+    from itertools import permutations
+
+    n = len(adj_list)
+    if n == 0:
+        return []
+
+    edges: list[tuple[int, int]] = []
+    for u in range(n):
+        for v in adj_list[u]:
+            if 0 <= v < n and u != v:
+                edges.append((u, v))
+    if not edges:
+        return [[] for _ in range(n)]
+    edges = list(set(edges))
+
+    m = len(edges)
+
+    best_perm = None
+    best_count = -1
+
+    inv_pos = [0] * n
+
+    for perm in permutations(range(n)):
+        for i, node in enumerate(perm):
+            inv_pos[node] = i
+
+        cnt = 0
+        for u, v in edges:
+            if inv_pos[u] < inv_pos[v]:
+                cnt += 1
+
+        if cnt > best_count:
+            best_count = cnt
+            best_perm = perm
+            if best_count == m:
+                break
+
+    assert best_perm is not None
+
+    for i, node in enumerate(best_perm):
+        inv_pos[node] = i  # reuse array
+
+    out_adj: list[list[int]] = [[] for _ in range(n)]
+    for u, v in edges:
+        if inv_pos[u] < inv_pos[v]:
+            out_adj[u].append(v)
+
+    return out_adj
 
 def add_transitive_edges(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)

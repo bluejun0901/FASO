@@ -16,6 +16,16 @@ class PreferenceBuilder(ABC):
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
         pass
 
+def get_cycle_removal_algorithm(name: str) -> Callable:
+    name = name.lower()
+    if name == "kahn":
+        return remove_cycles_kahn
+    if name == "dfs":
+        return remove_cycles_dfs
+    if name == "permutation":
+        return remove_cycles_permutation
+    raise Exception(f"Unknown cycle removal algorithm: {name}")
+
 # 완전 그래프, 사이클 O
 class CyclicPreferenceBuilder(PreferenceBuilder):
     def __init__(self, scorer):
@@ -119,11 +129,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
                     graph[j].append(i)
 
             algo = getattr(self.config, "cycle_removal", "kahn").lower()
-
-            if algo == "dfs":
-                kept_edges = remove_cycles_dfs(graph)
-            else:
-                kept_edges = remove_cycles_kahn(graph)
+            kept_edges = get_cycle_removal_algorithm(algo)(graph)
 
             for i, neis in enumerate(kept_edges):
                 for nei in neis:
@@ -203,11 +209,7 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
 
             # feedback arc 제거, 추론 (cycle removal)
             algo = getattr(self.config, "cycle_removal", "kahn").lower()
-
-            if algo == "dfs":
-                kept_edges = remove_cycles_dfs(graph)
-            else:
-                kept_edges = remove_cycles_kahn(graph)
+            kept_edges = get_cycle_removal_algorithm(algo)(graph)
 
             kept_edges = add_transitive_edges(kept_edges)
 
