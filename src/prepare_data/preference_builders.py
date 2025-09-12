@@ -24,6 +24,8 @@ def get_cycle_removal_algorithm(name: str) -> Callable:
         return remove_cycles_dfs
     if name == "permutation":
         return remove_cycles_permutation
+    if name == "exponential":
+        return remove_cycles_expodential
     raise Exception(f"Unknown cycle removal algorithm: {name}")
 
 # 완전 그래프, 사이클 O
@@ -104,7 +106,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
             self.groups[k].append((pair, pref))
 
         result = []
-        for group in self.groups:
+        for group in tqdm(self.groups, desc="Building preferences"):
             if len(group) == 0:
                 continue
             prompt = group[0][0]['prompt']
@@ -183,7 +185,7 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
             self.groups[k].append((pair, pref))
 
         result = []
-        for group in self.groups:
+        for group in tqdm(self.groups, desc="Building preferences"):
             if len(group) == 0: 
                 continue
             prompt = group[0][0]['prompt']

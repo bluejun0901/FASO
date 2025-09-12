@@ -24,7 +24,7 @@ from omegaconf import OmegaConf
 
 from src.prepare_data.preference_scorers import *
 from src.prepare_data.preference_builders import *
-    
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(

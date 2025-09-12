@@ -50,7 +50,7 @@ scorer:
 builder:
   type: acyclic_no_reason
   acyclic_no_reason:
-    cycle_removal: khan
+    cycle_removal: exponential
 
 trainer:
   type: dpo
