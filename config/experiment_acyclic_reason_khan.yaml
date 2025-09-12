@@ -48,8 +48,8 @@ scorer:
     preference_pattern: "Preferred:\\s*[\"']?([12])[\"']?"
 
 builder:
-  type: acyclic_no_reason
-  acyclic_no_reason:
+  type: acyclic_reason
+  acyclic_reason:
     cycle_removal: khan
 
 trainer:
