@@ -52,3 +52,4 @@ graphs/
 cache/
 dataset/
 .pytest_cache/
+wandb/
