@@ -52,7 +52,7 @@ class WinRateCalculator:
         for i in range(n):
             if len(ref_responses[i]['summaries']) > 0 and len(target_responses[i]['summaries']) > 0:
                 pairs.append({
-                    'prompt': prompts[i],
+                    'prompt': prompts[i]['article'],
                     'y1': ref_responses[i]['summaries'][0],
                     'y2': target_responses[i]['summaries'][0],
                     'ref': prompts[i]['reference'] if scorer.require_ref() else "",

@@ -63,7 +63,7 @@ trainer:
     save_total_limit: 20
 
 validation:
-  nrow: 200
+  nrow: 500
   scorer:
     type: openai
     openai:
