@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Callable
 
 from datasets import Dataset
 from omegaconf import OmegaConf
@@ -35,6 +36,7 @@ class CyclicPreferenceBuilder(PreferenceBuilder):
         self.scorer = scorer
         
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        self.pairs = []
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore
             ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
@@ -78,6 +80,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
         self.pairs: list[dict] = []
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        self.pairs = []
         self.example_count = len(dataset)
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore
@@ -157,6 +160,7 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
         self.pairs: list[dict] = []
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        self.pairs = []
         self.example_count = len(dataset)
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore

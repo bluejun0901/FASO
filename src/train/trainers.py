@@ -29,12 +29,12 @@ class mDPOTrainer(mTrainer):
         self.dataset = None
 
     def preprocess(self, dataset: Dataset | list[dict[str, str]]) -> Dataset:
-        if dataset is list:
+        if isinstance(dataset, list):
             self.dataset = Dataset.from_list(dataset)
         else:
             assert isinstance(dataset, Dataset)
             self.dataset = dataset
-        return dataset
+        return self.dataset
     
     def train(self, output_dir: str, logging_dir: str) -> None:
         if self.dataset is None:

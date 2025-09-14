@@ -109,7 +109,7 @@ if __name__ == "__main__":
         # Consider win_rate empty if missing or None or empty string
         if ref_model_path and target_model_path:
             index_by_pair[(ref_model_path, target_model_path)] = idx
-            if win_rate_val is None:
+            if win_rate_val in (None, ""):
                 targets_by_ref[ref_model_path].append(target_model_path)
 
     # print summary of what to process
