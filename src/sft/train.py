@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import torch
 from transformers import AutoTokenizer
@@ -25,7 +25,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def process_one_data(data: dict, 
                      tokenizer: AutoTokenizer) -> dict:
-    prompt = f"Summarize the following text in a TL;DR style in **one sentence**\n\n{data['article']}\n"
+    prompt = f"{data['article']}\n\nTL;DR:"
     response = data["highlights"]
     full_text = tokenizer.apply_chat_template(
         [{"role": "user", "content": prompt}, {"role": "assistant", "content": response}],
@@ -77,26 +77,26 @@ if __name__ == "__main__":
     print("model loaded")
 
     print("loading dataet")
-    dataset_path = DATA_ROOT / '.kaggle' / 'cnn_dailymail' / 'train.csv'
+    dataset_path = DATA_ROOT / 'cnn_dailymail' / 'train.csv'
     df = pd.read_csv(dataset_path)  # Load subset of dataset
-    dataset = Dataset.from_pandas(df)
+    dataset = Dataset.from_pandas(df[20000:23000])
     print("dataset loaded")
 
     print("preprocessing dataset")
     dataset = preprocess_dataset(dataset, tokenizer)
     print("dataset preprocessed")
 
-    output_dir = MODEL_ROOT / 'finetuned' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
+    output_dir = MODEL_ROOT / 'new_finetuned'
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
         per_device_train_batch_size=8,
         gradient_accumulation_steps=2,
-        num_train_epochs=3,
-        logging_steps=50,
+        num_train_epochs=1,
+        logging_steps=5,
         save_strategy="steps",
-        save_steps=200,
-        save_total_limit=5,
+        save_steps=20,
+        save_total_limit=10,
         fp16=True
     )
 
