@@ -10,7 +10,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 import torch
 from transformers import AutoTokenizer
@@ -59,9 +59,9 @@ if __name__ == "__main__":
     trainer = get_m_trainer(config.trainer, tokenizer, model)
     print("Trainer created")
 
-    output_dir = MODEL_ROOT / config.model_output_dir / get_filename(config.builder.type, config.scorer.type, config.trainer.type, suffix="")
+    output_dir = MODEL_ROOT / config.model_output_dir / config.name
     output_dir.mkdir(parents=True, exist_ok=True)
-    log_dir = LOG_ROOT / config.log_dir / get_filename(config.builder.type, config.scorer.type, config.trainer.type, suffix="")
+    log_dir = LOG_ROOT / config.log_dir / config.name
     log_dir.mkdir(parents=True, exist_ok=True)
 
     print("Preprocessing data...")

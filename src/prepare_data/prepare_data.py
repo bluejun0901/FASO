@@ -50,9 +50,6 @@ if __name__ == "__main__":
         api_key=os.getenv("OPENAI_API_KEY")
     )
 
-    model_path = MODEL_ROOT / config.model_name
-    dataset_path = DATA_ROOT / config.dataset_name
-
     gen_filename = args.gen_filename
     gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Loading generated ouputs from {str(gen_output_path)}...")
@@ -61,6 +58,7 @@ if __name__ == "__main__":
     dataset = Dataset.from_dict(dataset)
     print("Loaded successfully")
     
+    print("Starting labeling...")
     comparison_file = DATA_ROOT / config.dataset_output_dir / args.comp_filename
 
     preference_scorer = CachedPreferenceScorer(str(comparison_file))
@@ -71,12 +69,7 @@ if __name__ == "__main__":
     result = preference_builder.build_with_comparisons(compared)
     print("Labeled successfully.")
     
-    filename = get_filename(
-        "output",
-        config.builder.type,
-        config.scorer.type,
-        suffix=".json",
-    )
+    filename = config.output_filename
     output_path = DATA_ROOT / config.dataset_output_dir / filename
     
     print(f"Saving result to {str(output_path)}...")

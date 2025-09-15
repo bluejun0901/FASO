@@ -25,7 +25,7 @@ def get_cycle_removal_algorithm(name: str) -> Callable:
         return remove_cycles_dfs
     if name == "permutation":
         return remove_cycles_permutation
-    if name == "exponential":
+    if name == "deterministic":
         return remove_cycles_expodential
     raise Exception(f"Unknown cycle removal algorithm: {name}")
 

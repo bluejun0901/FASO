@@ -4,7 +4,9 @@ dataset_output_dir: experiment2/preprocessed
 model_output_dir: experiment2
 log_dir: experiment2
 
+output_filename: train_acyclic_reason_kahn.json
+
 builder:
   type: acyclic_reason
   acyclic_reason:
-    cycle_removal: khan
+    cycle_removal: kahn

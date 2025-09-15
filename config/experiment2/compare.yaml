@@ -7,7 +7,7 @@ log_dir: experiment2
 scorer:
   type: openai
   openai:
-    type: batch
+    type: realtime
     model: gpt-5
     batch:
       max_request_per_batch: 25000
