@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shutil
 from dotenv import load_dotenv
 import argparse
 
@@ -11,7 +12,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -34,7 +35,7 @@ def get_summary_generator(model_path: str, generation_config: OmegaConf) -> Summ
     if model_path.lower().endswith("reference"):
         return ReferenceSummaryGenerator(generation_config)
     else:
-        print(f"Loading model from {MODEL_ROOT / model_path}...")
+        print(f"Loading model from {model_path}...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(model_path, local_files_only=True, trust_remote_code=True).to(device)
@@ -44,14 +45,20 @@ def get_summary_generator(model_path: str, generation_config: OmegaConf) -> Summ
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "config_path", 
-        type=str, 
-        help="reletive path to configuration file"
+        "config_path",
+        type=str,
+        help="relative path to configuration file"
     )
     parser.add_argument(
-        "out_path",
+        "target_path",
         type=str,
-        help="relative path to JSON file to update in-place"
+        help="relative path to target model or directory of models"
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=str,
+        default=None,
+        help="optional relative path for outputs; defaults to config.result_dir"
     )
     args = parser.parse_args()
 
@@ -69,19 +76,41 @@ if __name__ == "__main__":
     dataset = Dataset.from_pandas(df)
     print(f"Successfully loaded")
 
-    out_path = DATA_ROOT / args.out_path
-    # Load existing JSON list of pairs and win_rates
-    if out_path.exists():
-        with open(str(out_path), "r") as check:
-            try:
-                existing: list[dict] = json.load(check)
-            except Exception:
-                existing = []
-    else:
-        existing = []
+    ref_model_path = MODEL_ROOT / config.validation.ref_model_path
+    models_path = MODEL_ROOT / args.target_path
+    target_paths: list[Path] = []
+    for path in models_path.rglob("*"):
+        if path.is_dir() and path.name.startswith("checkpoint-"):
+            if not (path / "config.json").exists():
+                shutil.copy(MODEL_ROOT / "config.json", path / "config.json")
+            if not (path / "generation_config.json").exists():
+                shutil.copy(MODEL_ROOT / "generation_config.json", path / "generation_config.json")
+            # keep as Path relative to MODEL_ROOT for consistent naming
+            rel_path = path.relative_to(MODEL_ROOT)
+            target_paths.append(rel_path)
 
-    # Helper: write JSON back atomically after each update
-    def write_json_atomic(path: Path, data: list[dict[str, Any]]) -> None:
+    # Determine output directory
+    result_dir = Path(args.out_dir) if args.out_dir is not None else Path(config.result_dir)
+    out_path = DATA_ROOT / result_dir
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    print("Looking for existing results...")
+    results: dict[str, list] = {}
+    for target_model_path in target_paths:
+        name = str(target_model_path.parent.name)
+        results[name] = []
+        result_file = out_path / f"{name}_win_rate.json"
+        if result_file.exists():
+            with open(result_file, "r") as f:
+                existing_results = json.load(f)
+                # ensure list
+                if isinstance(existing_results, list):
+                    results[name].extend(existing_results)
+                else:
+                    results[name].append(existing_results)
+    print("Existing results loaded.")
+
+    def write_json_atomic(path: Path, data: list) -> None:
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         with open(str(tmp_path), "w") as f:
             json.dump(data, f, indent=2)
@@ -89,68 +118,59 @@ if __name__ == "__main__":
             os.fsync(f.fileno())
         os.replace(tmp_path, path)
 
-    # Prepare calculator and scorer
     win_rate_calculator = WinRateCalculator()
     win_rate_calculator.set_dataset(dataset)
     scorer = get_preference_scorer(config.validation.scorer, client)
 
-    # Group targets by reference model for efficient generation
-    from collections import defaultdict
-    targets_by_ref: dict[str, list[str]] = defaultdict(list)
+    print(f"Processing reference model: {ref_model_path}")
+    ref_summary_generator = get_summary_generator(str(ref_model_path), config.validation.generation)
+    win_rate_calculator.set_ref_generator(ref_summary_generator)
+    win_rate_calculator.ref_generate()
 
-    # Map to index to update results back efficiently
-    index_by_pair: dict[tuple[str, str], int] = {}
+    # Save reference generations
+    ref_output_out_filename = out_path / "outputs" / f"{config.validation.ref_model_path.replace('/', '_')}.json"
+    ref_output_out_filename.parent.mkdir(parents=True, exist_ok=True)
+    # Convert Dataset to list[dict] for JSON writing
+    if win_rate_calculator.ref_responses is not None:
+        write_json_atomic(ref_output_out_filename, win_rate_calculator.ref_responses.to_list())
+        print(f"Reference outputs saved to {ref_output_out_filename}")
 
-    for idx, item in enumerate(existing):
-        ref_model_path = item.get("ref_model", "").strip()
-        target_model_path = item.get("target_model", "").strip()
-        win_rate_val = item.get("win_rate", None)
+    for j, target_model_path in enumerate(target_paths):
+        steps = int(str(target_model_path).split("-")[-1]) if "checkpoint-" in str(target_model_path) else -1
+        name = str(target_model_path.parent.name)
+        if steps in [x.get('step') for x in results.get(name, [])]:
+            print(f"Skipping target model {target_model_path}'s checkpoint {steps} as results already exist.")
+            continue
+        print(f"Processing target model {j+1}/{len(target_paths)}: {target_model_path}")
+        target_summary_generator = get_summary_generator(str(MODEL_ROOT / target_model_path), config.validation.generation)
+        win_rate_calculator.set_target_generator(target_summary_generator)
+        win_rate_calculator.target_generate()
 
-        # Consider win_rate empty if missing or None or empty string
-        if ref_model_path and target_model_path:
-            index_by_pair[(ref_model_path, target_model_path)] = idx
-            if win_rate_val in (None, ""):
-                targets_by_ref[ref_model_path].append(target_model_path)
+        # Save target generations
+        target_output_out_filename = out_path / "outputs" / f"{str(target_model_path).replace('/', '_')}.json"
+        target_output_out_filename.parent.mkdir(parents=True, exist_ok=True)
+        if win_rate_calculator.target_responses is not None:
+            target_records = win_rate_calculator.target_responses.to_list()
+            write_json_atomic(target_output_out_filename, target_records)
+            print(f"Target outputs saved to {target_output_out_filename}")
 
-    # print summary of what to process
-    print(f"Total pairs in JSON: {len(existing)}")
-    print(f"Pairs with empty win_rate to process: {sum(len(v) for v in targets_by_ref.values())}")
-    print(f"Unique reference models to process: {len(targets_by_ref)}")
-    for ref_model_path, targets in targets_by_ref.items():
-        ref_path = MODEL_ROOT / ref_model_path
-        if not ref_path.exists():
-            raise FileNotFoundError(f"Reference model path {ref_path} does not exist")
-        print(f"  Reference model: {ref_model_path} -> {len(targets)} target models")
-        for target_model_path in targets:
-            target_path = MODEL_ROOT / target_model_path
-            if not target_path.exists():
-                raise FileNotFoundError(f"Target model path {target_path} does not exist")
-            print(f"    Target model: {target_model_path}")
+        print(f"Calculating win rate for {target_model_path}")
+        win_rate, comp = win_rate_calculator.calculate_win_rate(dataset, scorer)
+        print("Calculated successfully")
 
-    if not targets_by_ref:
-        print("No empty win_rate entries found. Nothing to do.")
-    else:
-        # Iterate each reference model once
-        for i, (ref_model_path, targets) in enumerate(targets_by_ref.items()):
-            print(f"Processing reference model {i+1}/{len(targets_by_ref)}: {ref_model_path}")
-            ref_summary_generator = get_summary_generator(str(MODEL_ROOT / ref_model_path), config.validation.generation)
-            win_rate_calculator.set_ref_generator(ref_summary_generator)
-            win_rate_calculator.ref_generate()
+        result = {
+            "ref_model": config.validation.ref_model_path,
+            "target_model": name,
+            "step": steps,
+            "win_rate": win_rate,
+            "n_compared": len([c for c in comp if c is not None]),
+            "n_win": len([c for c in comp if c == 1]),
+            "n_rows": len(comp),
+            "comparisons": comp
+        }
 
-            for j, target_model_path in enumerate(targets):
-                target_summary_generator = get_summary_generator(str(MODEL_ROOT / target_model_path), config.validation.generation)
-                win_rate_calculator.set_target_generator(target_summary_generator)
-                win_rate_calculator.target_generate()
-
-                print(f"Calculating win rate for pair ({ref_model_path}, {target_model_path})")
-                win_rate, _ = win_rate_calculator.calculate_win_rate(dataset, scorer)
-                print("Calculated successfully")
-
-                # Update the corresponding item in-place
-                idx = index_by_pair[(ref_model_path, target_model_path)]
-                existing[idx]["win_rate"] = win_rate
-                # Persist after each calculation
-                write_json_atomic(out_path, existing)
-
-    # Final write to ensure formatting and completeness (no-op if unchanged)
-    write_json_atomic(out_path, existing)
+        result_out_filename = out_path / f"{name}_win_rate.json"
+        result_out_filename.parent.mkdir(parents=True, exist_ok=True)
+        results[name].append(result)
+        print(results[name])
+        write_json_atomic(result_out_filename, results[name])

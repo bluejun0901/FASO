@@ -2,10 +2,11 @@ dataset_name: cnn_dailymail
 col_renames:
   highlights: reference
 
-log_dir: experiment2
+result_dir: experiment2/validation
 
 validation:
-  nrow: 500
+  ref_model_path: sft/checkpoint-80
+  nrow: 300
   scorer:
     type: openai
     openai:
@@ -32,8 +33,5 @@ validation:
       {article}
       TL;DR:
     max_new_tokens: 128
-    temperature: 0.0
-    top_p: 1.0
-    top_k: 0
     num_return_sequences: 1
     do_sample: False

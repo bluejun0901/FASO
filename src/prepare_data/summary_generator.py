@@ -44,13 +44,7 @@ class ModelSummaryGenerator(SummaryGenerator):
             outputs = self.model.generate(
                 inputs,
                 attention_mask=attention_mask,
-                max_new_tokens=self.config.max_new_tokens,
-                do_sample=True,
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-                top_k=self.config.top_k,
-                num_return_sequences=self.config.num_return_sequences,
-                pad_token_id=self.tokenizer.eos_token_id
+                **{str(k): v for k, v in self.config.items() if k != "prompt"}
             )
 
         output_texts = [
