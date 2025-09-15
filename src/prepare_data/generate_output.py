@@ -10,7 +10,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,4"
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     print("Model loaded successfully.")
 
     print(f"Loading dataset from {dataset_path}...")
-    df = pd.read_csv(dataset_path / "test.csv", nrows=config.nrow if "nrow" in config else None)
+    df = pd.read_csv(dataset_path / "train.csv", nrows=config.nrow if "nrow" in config else None)
     
     df = df.rename(columns=dict(config.col_renames))
     
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     dataset = generator.generate_batch(dataset)
     print("Summaries generated successfully.")
 
-    gen_filename = get_filename("generated", config.builder.type, config.scorer.type, suffix=".json")
+    gen_filename = config.name + "_generation.json"
     gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Saving generated summeries to {str(gen_output_path)}...")
     gen_output_path.parent.mkdir(parents=True, exist_ok=True)

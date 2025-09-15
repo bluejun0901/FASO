@@ -24,6 +24,7 @@ class ModelSummaryGenerator(SummaryGenerator):
         self.model = model
         self.config = config
     
+    @torch.inference_mode()
     def generate(self, article: str) -> dict | None:
         prompt_text = self.config.prompt.format(article=article)
         
@@ -33,7 +34,7 @@ class ModelSummaryGenerator(SummaryGenerator):
         prompt = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
 
         inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
-        if inputs.shape[-1] > self.model.config.max_position_embeddings:
+        if inputs.shape[-1] + self.config.max_new_tokens > self.model.config.max_position_embeddings:
             return None
         
         attention_mask = torch.ones(inputs.shape, device=self.model.device)
@@ -59,6 +60,7 @@ class ModelSummaryGenerator(SummaryGenerator):
 
         return {"article": article, "prompt": prompt_text, "summaries": output_texts}
     
+    @torch.inference_mode()
     def generate_batch(self, articles: Dataset) -> Dataset:
         def f(example):
             generation = self.generate(example['article'])
