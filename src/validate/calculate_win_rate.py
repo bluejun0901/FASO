@@ -172,5 +172,4 @@ if __name__ == "__main__":
         result_out_filename = out_path / f"{name}_win_rate.json"
         result_out_filename.parent.mkdir(parents=True, exist_ok=True)
         results[name].append(result)
-        print(results[name])
         write_json_atomic(result_out_filename, results[name])

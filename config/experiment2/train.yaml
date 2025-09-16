@@ -1,4 +1,4 @@
-name: acyclic_reason_kahn
+name: acyclic_reason_deterministic
 
 model_name: sft/checkpoint-80
 
