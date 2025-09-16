@@ -11,3 +11,4 @@ matplotlib
 tensorboard
 rouge-score
 tqdm
+wandb

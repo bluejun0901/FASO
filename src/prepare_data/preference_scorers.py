@@ -82,9 +82,9 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         match = re.search(self.pattern, output_text)
         if not match:
             return None
-        # '1' means first shown, '2' means second shown
+
         judged_idx = 0 if match.group(1) == "1" else 1
-        # Map back to original (y1=0, y2=1)
+
         return (1 - judged_idx) if swapped else judged_idx
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
@@ -176,7 +176,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.total = 0
 
         self.pairs = []
-        # Track whether each pair's responses were swapped when sent to the judge
+
         self.swapped: list[bool] = []
     
     def require_ref(self):
@@ -244,7 +244,6 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         return (1, batch)
 
     def compare_batch_1(self, paths: list[str], max_concurrent: int | None = None) -> dict:
-        # Track paths and attempts so we can resubmit failed batches
         self.paths = list(paths)
         pending = list(paths)
         random.shuffle(pending)
@@ -300,15 +299,12 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                         finished.append(b)
                         if b.status == "completed":
                             can_add_batch = True
-                            # completed increments below via request_counts
                         else:
-                            # For terminal error states, attempt resubmission
                             path = batch_to_path.get(batch_id)
                             if path is not None:
                                 if attempts.get(path, 0) < self.max_retries:
                                     attempts[path] = attempts.get(path, 0) + 1
                                     pending.append(path)
-                                # Keep count of terminal statuses regardless
                             can_add_batch = True
                         if b.status in count:
                             count[b.status] += 1
@@ -346,7 +342,6 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                         time.sleep(self.poll_interval)
                         b = self._retry(self.client.batches.retrieve, b.id)
                     if b.status in ("failed", "expired", "canceled"):
-                        # Requeue if attempts remain
                         if attempts[submit] < self.max_retries:
                             pending.append(submit)
                         if in_flight:
@@ -376,9 +371,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         match = re.search(self.pattern, output_text)
         if not match:
             return idx, None
-        # Map '1' -> 0 (first shown), '2' -> 1 (second shown)
+        
         judged_idx = 0 if match.group(1) == "1" else 1
-        # Convert back to original y1/y2 indexing using recorded swap info
         swapped = self.swapped[idx] if 0 <= idx < len(self.swapped) else False
         orig_idx = (1 - judged_idx) if swapped else judged_idx
         return idx, orig_idx
@@ -389,10 +383,8 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         for b in self.batchs:
             if getattr(b, "status", None) == "completed" and getattr(b, "output_file_id", None):
                 content_resp = self._retry(self.client.files.content, b.output_file_id)
-                # Support both text attribute and binary stream
                 data = getattr(content_resp, "text", None)
                 if data is None:
-                    # Assume file-like stream with .read()
                     raw = content_resp.read()
                     if isinstance(raw, bytes):
                         data = raw.decode("utf-8", errors="ignore")

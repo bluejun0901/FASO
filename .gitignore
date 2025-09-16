@@ -53,3 +53,4 @@ cache/
 dataset/
 .pytest_cache/
 wandb/
+notebooks/recover.ipynb
