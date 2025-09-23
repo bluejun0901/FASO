@@ -2,22 +2,22 @@ from datasets import Dataset
 
 from src.utils.utility import *
 from src.prepare_data.preference_scorers import *
-from src.prepare_data.summary_generator import *
+from prepare_data.output_generator import *
 
 class WinRateCalculator:
     def __init__(self, 
-                 ref_generator: SummaryGenerator | None=None,
-                 target_generator: SummaryGenerator | None=None):
+                 ref_generator: Generator | None=None,
+                 target_generator: Generator | None=None):
         self.ref_generator = ref_generator
         self.target_generator = target_generator
         self.dataset: Dataset | None = None
         self.ref_responses: Dataset | None = None
         self.target_responses: Dataset | None = None
 
-    def set_ref_generator(self, ref_generator: SummaryGenerator) -> None:
+    def set_ref_generator(self, ref_generator: Generator) -> None:
         self.ref_generator = ref_generator
 
-    def set_target_generator(self, target_genetartor: SummaryGenerator) -> None:
+    def set_target_generator(self, target_genetartor: Generator) -> None:
         self.target_generator = target_genetartor
 
     def set_dataset(self, dataset: Dataset) -> None:

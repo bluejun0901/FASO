@@ -39,17 +39,17 @@ class CyclicPreferenceBuilder(PreferenceBuilder):
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore
             ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
-            summaries = example['summaries'] # type: ignore
+            generated= example['generated'] # type: ignore
             
-            for i, y1 in enumerate(summaries):
-                for j, y2 in enumerate(summaries):
+            for i, y1 in enumerate(generated):
+                for j, y2 in enumerate(generated):
                     if i < j:
                         self.pairs.append({
                             'prompt': prompt,
                             'y1': y1,
                             'y2': y2,
                             'ref': ref,
-                            'meta': f"{k}, {i}, {j}"
+                            'id': f"{k}, {i}, {j}"
                         })
         
         return self.pairs
@@ -83,17 +83,17 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore
             ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
-            summaries = example['summaries'] # type: ignore
+            generated = example['generated'] # type: ignore
             
-            for i, y1 in enumerate(summaries):
-                for j, y2 in enumerate(summaries):
+            for i, y1 in enumerate(generated):
+                for j, y2 in enumerate(generated):
                     if i < j:
                         self.pairs.append({
                             'prompt': prompt,
                             'y1': y1,
                             'y2': y2,
                             'ref': ref,
-                            'meta': f"{k}, {i}, {j}"
+                            'id': f"{k}, {i}, {j}"
                         })
         
         return self.pairs
@@ -103,7 +103,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
                 continue
-            k = int(pair['meta'].split(",")[0])
+            k = int(pair['id'].split(",")[0])
             self.groups[k].append((pair, pref))
 
         result = []
@@ -114,18 +114,18 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
             max_idx = 0
 
             for pair, pref in group:
-                _, i, j = map(int, pair['meta'].split(", "))
+                _, i, j = map(int, pair['id'].split(", "))
                 max_idx = max(max_idx, i, j)
 
-            summaries = [""] * (max_idx + 1)
+            generated = [""] * (max_idx + 1)
             graph = [[] for _ in range(max_idx + 1)]
 
             for pair, pref in group:
-                _, i, j = map(int, pair['meta'].split(", "))
+                _, i, j = map(int, pair['id'].split(", "))
                 y1, y2 = pair['y1'], pair['y2']
                 max_idx = max(max_idx, i, j)
-                summaries[i] = y1
-                summaries[j] = y2
+                generated[i] = y1
+                generated[j] = y2
                 if pref == 0:
                     graph[i].append(j)
                 else:
@@ -136,7 +136,7 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
 
             for i, neis in enumerate(kept_edges):
                 for nei in neis:
-                    chosen, rejected = (summaries[i], summaries[nei])
+                    chosen, rejected = (generated[i], generated[nei])
                     result.append({
                         'prompt': prompt,
                         'chosen': chosen,
@@ -162,17 +162,17 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
         for k, example in enumerate(dataset):
             prompt = example['prompt'] # type: ignore
             ref = example['reference'] if self.scorer.require_ref() else "" # type: ignore
-            summaries = example['summaries'] # type: ignore
+            generated = example['generated'] # type: ignore
             
-            for i, y1 in enumerate(summaries):
-                for j, y2 in enumerate(summaries):
+            for i, y1 in enumerate(generated):
+                for j, y2 in enumerate(generated):
                     if i < j:
                         self.pairs.append({
                             'prompt': prompt,
                             'y1': y1,
                             'y2': y2,
                             'ref': ref,
-                            'meta': f"{k}, {i}, {j}"
+                            'id': f"{k}, {i}, {j}"
                         })
         
         return self.pairs
@@ -182,7 +182,7 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
                 continue
-            k = int(pair['meta'].split(",")[0])
+            k = int(pair['id'].split(",")[0])
             self.groups[k].append((pair, pref))
 
         result = []
@@ -193,18 +193,18 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
             max_idx = 0
 
             for pair, pref in group:
-                _, i, j = map(int, pair['meta'].split(", "))
+                _, i, j = map(int, pair['id'].split(", "))
                 max_idx = max(max_idx, i, j)
 
-            summaries = [""] * (max_idx + 1)
+            generated = [""] * (max_idx + 1)
             graph = [[] for _ in range(max_idx + 1)]
 
             for pair, pref in group:
-                _, i, j = map(int, pair['meta'].split(", "))
+                _, i, j = map(int, pair['id'].split(", "))
                 y1, y2 = pair['y1'], pair['y2']
                 max_idx = max(max_idx, i, j)
-                summaries[i] = y1
-                summaries[j] = y2
+                generated[i] = y1
+                generated[j] = y2
                 if pref == 0:
                     graph[i].append(j)
                 else:
@@ -218,7 +218,7 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
 
             for i, neis in enumerate(kept_edges):
                 for nei in neis:
-                    chosen, rejected = (summaries[i], summaries[nei])
+                    chosen, rejected = (generated[i], generated[nei])
                     result.append({
                         'prompt': prompt,
                         'chosen': chosen,

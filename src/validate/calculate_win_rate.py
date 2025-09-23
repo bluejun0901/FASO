@@ -25,12 +25,12 @@ from src.utils.utility import *
 from omegaconf import OmegaConf
 import json
 
-from src.prepare_data.summary_generator import *
+from prepare_data.output_generator import *
 from src.prepare_data.preference_scorers import *
 from src.validate.win_rate_calculator import WinRateCalculator
 from typing import Any
 
-def get_summary_generator(model_path: str, generation_config: OmegaConf) -> SummaryGenerator:
+def get_summary_generator(model_path: str, generation_config: OmegaConf) -> Generator:
     model_path = model_path.strip()
     if model_path.lower().endswith("reference"):
         return ReferenceSummaryGenerator(generation_config)
@@ -40,7 +40,7 @@ def get_summary_generator(model_path: str, generation_config: OmegaConf) -> Summ
         tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(model_path, local_files_only=True, trust_remote_code=True).to(device)
         print("Model loaded successfully.")
-        return ModelSummaryGenerator(tokenizer, model, generation_config)
+        return ModelGenerator(tokenizer, model, generation_config)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

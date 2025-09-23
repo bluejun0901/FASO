@@ -22,7 +22,7 @@ class PreferenceScorer(ABC):
         pass
     
     @abstractmethod
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None=None) -> int | None:
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None=None) -> int | None:
         pass
     
     @abstractmethod
@@ -38,10 +38,10 @@ class ROUGEPreferenceScorer(PreferenceScorer):
     def require_ref(self):
         return self.require_ref_flag
                         
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None=None) -> int | None:
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None=None) -> int | None:
         s1 = self.scorer.score(ref, y1)[self.rouge_type].fmeasure
         s2 = self.scorer.score(ref, y2)[self.rouge_type].fmeasure
-                        
+
         return 0 if s1 > s2 else 1
     
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
@@ -56,17 +56,21 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         self.client = client
         self.model_name = config.model
         self.prompt_template = config.prompt
+        self.prompt_parse = config.prompt_parse
         self.pattern: str = config.preference_pattern
         
     def require_ref(self):
         return self.require_ref_flag
                       
-    def compare(self, prompt: str, y1: str, y2: str, ref: str="") -> int | None:
+    def compare(self, prompt: str, y1: str, y2: str, ref: str="", id: str | None=None) -> int | None:
         # Randomize which response is shown first to the judge
         swapped = random.choice([False, True])
         first = y2 if swapped else y1
         second = y1 if swapped else y2
-        user_prompt = self.prompt_template.format(article=prompt, summary1=first, summary2=second)
+        parsed_prompt = re.match(self.prompt_parse, prompt)
+        if not parsed_prompt:
+            raise ValueError(f"Prompt does not match the expected format: {self.prompt_parse}")
+        user_prompt = self.prompt_template.format(prompt=parsed_prompt.group(1), generated1=first, generated2=second)
 
         response = self.client.responses.create(
             model=self.model_name,
@@ -119,10 +123,10 @@ class CachedPreferenceScorer(PreferenceScorer):
     def require_ref(self):
         return self.require_ref_flag
 
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, meta: str | None = None) -> int | None:
-        if meta is None:
-            raise Exception("'meta' field must be included when calling CachedPreferenceScorer")
-        key = self._normalize_id(str(meta))
+    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None) -> int | None:
+        if id is None:
+            raise Exception("'id' field must be included when calling CachedPreferenceScorer")
+        key = self._normalize_id(str(id))
         if key not in self._cache:
             raise KeyError(f"Comparison id '{key}' not found in {self.comparison_file_path}")
         return self._cache[key]
@@ -130,7 +134,7 @@ class CachedPreferenceScorer(PreferenceScorer):
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared: list[int | None] = []
         for pair in pairs:
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'], pair['meta']))  # type: ignore
+            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'], pair['id']))  # type: ignore
         return compared
     
 class BatchPreferenceScorer(PreferenceScorer):
@@ -162,6 +166,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.client = client
         self.model_name = config.model
         self.prompt_template = config.prompt
+        self.prompt_parse = config.prompt_parse
         self.pattern = config.preference_pattern
         c = getattr(config, "batch", None)
         self.max_concurrent = getattr(c, "max_concurrent", 3) if c is not None else 3
@@ -190,7 +195,9 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             if i % self.max_request_size == 0:
                 requests.append([])
 
-            prompt = pair['prompt'] # type: ignore
+            prompt = re.match(self.prompt_parse, pair['prompt']) # type: ignore
+            if not prompt:
+                raise ValueError(f"Prompt does not match the expected format: {self.prompt_parse}")
             y1 = pair['y1'] # type: ignore
             y2 = pair['y2'] # type: ignore
 
@@ -200,7 +207,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             summary1 = y2 if swapped else y1
             summary2 = y1 if swapped else y2
 
-            user_prompt = self.prompt_template.format(article=prompt, summary1=summary1, summary2=summary2)
+            user_prompt = self.prompt_template.format(prompt=prompt.group(1), summary1=summary1, summary2=summary2)
             body = {
                 "model": self.model_name,
                 "input": user_prompt,

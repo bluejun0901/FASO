@@ -1,0 +1,12 @@
+name: test
+
+dataset_output_dir: test/preprocessed
+model_output_dir: test
+log_dir: test
+
+output_filename: train_acyclic_reason_kahn.json
+
+builder:
+  type: acyclic_reason
+  acyclic_reason:
+    cycle_removal: kahn

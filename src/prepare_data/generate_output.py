@@ -22,8 +22,8 @@ from src.utils.utility import *
 
 from omegaconf import OmegaConf
 
-from src.prepare_data.summary_generator import *
-    
+from src.prepare_data.output_generator import *
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -45,14 +45,14 @@ if __name__ == "__main__":
     print("Model loaded successfully.")
 
     print(f"Loading dataset from {dataset_path}...")
-    df = pd.read_csv(dataset_path / "train.csv", nrows=config.nrow if "nrow" in config else None)
+    df = pd.read_csv(dataset_path, nrows=config.nrow if "nrow" in config else None)
     
     df = df.rename(columns=dict(config.col_renames))
     
     dataset = Dataset.from_pandas(df)
     print("Dataset loaded successfully.")
     
-    generator = ModelSummaryGenerator(tokenizer, model, config.generation)
+    generator = ModelGenerator(tokenizer, model, config.generation)
     dataset = generator.generate_batch(dataset)
     print("Summaries generated successfully.")
 

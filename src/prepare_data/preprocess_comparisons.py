@@ -29,17 +29,17 @@ def generate_comparisons(dataset: Dataset, scorer: PreferenceScorer) -> list[dic
     for k, example in enumerate(dataset):
         prompt = example['prompt'] # type: ignore
         ref = example['reference'] if scorer.require_ref() else "" # type: ignore
-        summaries = example['summaries'] # type: ignore
-        
-        for i, y1 in enumerate(summaries):
-            for j, y2 in enumerate(summaries):
+        generated = example['generated'] # type: ignore
+
+        for i, y1 in enumerate(generated):
+            for j, y2 in enumerate(generated):
                 if i < j:
                     pairs.append({
                         'prompt': prompt,
                         'y1': y1,
                         'y2': y2,
                         'ref': ref,
-                        'meta': f"{k}, {i}, {j}"
+                        'id': f"{k}, {i}, {j}"
                     })
     
     return pairs
@@ -78,12 +78,7 @@ if __name__ == "__main__":
     print("Loaded successfully")
 
     if args.cached == "None":
-        filename = get_filename(
-            "comparison",
-            config.builder.type,
-            config.scorer.type,
-            suffix=".jsonl",
-        )
+        filename = f"{config.name}_comparison_{config.scorer.type}.jsonl"
         output_path = DATA_ROOT / config.dataset_output_dir / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path = str(output_path)
@@ -109,14 +104,14 @@ if __name__ == "__main__":
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
         
         comparisons = generate_comparisons(dataset, preference_scorer)
-        comparisons = [comparison for comparison in comparisons if comparison['meta'] not in cache]
+        comparisons = [comparison for comparison in comparisons if comparison['id'] not in cache]
         compared = preference_scorer.compare_batch(comparisons)
         print("Labeled successfully.")
         
         print(f"Saving result to {output_path}...")
         with open(output_path, "w", encoding="utf-8") as f:
             for pair, compare in zip(comparisons, compared):
-                line = json.dumps({"id": pair['meta'], "result": compare}, ensure_ascii=False)
+                line = json.dumps({"id": pair['id'], "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
             for pair, compare in cache.items():
                 line = json.dumps({"id": pair, "result": compare}, ensure_ascii=False)
@@ -128,13 +123,12 @@ if __name__ == "__main__":
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
 
         comparisons = generate_comparisons(dataset, preference_scorer)
-        comparisons = [comparison for comparison in comparisons if comparison['meta'] not in cache]
+        comparisons = [comparison for comparison in comparisons if comparison['id'] not in cache]
         requests = preference_scorer.compare_batch_0(comparisons)
         print("jsonl file created")
 
         base_path = get_filename(
             "request",
-            config.builder.type,
             config.scorer.type,
             suffix="",
         )
@@ -166,19 +160,11 @@ if __name__ == "__main__":
         compared = preference_scorer.compare_batch_2()
         print("Batch file Parsed")
         
-        filename = get_filename(
-            "comparison",
-            config.builder.type,
-            config.scorer.type,
-            suffix=".jsonl",
-        )
-        output_path = DATA_ROOT / config.dataset_output_dir / filename
-        
         print(f"Saving result to {str(output_path)}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(str(output_path), "w", encoding="utf-8") as f:
             for pair, compare in zip(comparisons, compared):
-                line = json.dumps({"id": pair['meta'], "result": compare}, ensure_ascii=False)
+                line = json.dumps({"id": pair['id'], "result": compare}, ensure_ascii=False)
                 f.write(line + "\n")
             for pair, compare in cache.items():
                 line = json.dumps({"id": pair, "result": compare}, ensure_ascii=False)

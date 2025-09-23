@@ -5,17 +5,18 @@ from datasets import Dataset
 from abc import ABC, abstractmethod
 
 from omegaconf import OmegaConf
+import string
 
-class SummaryGenerator(ABC):
+class Generator(ABC):
     @abstractmethod
-    def generate(self, article: str) -> dict | None:
+    def generate(self, example: dict) -> dict | None:
         pass
     
     @abstractmethod
-    def generate_batch(self, articles: Dataset) -> Dataset:
+    def generate_batch(self, dataset: Dataset) -> Dataset:
         pass
 
-class ModelSummaryGenerator(SummaryGenerator):
+class ModelGenerator(Generator):
     def __init__(self,
                  tokenizer: AutoTokenizer,
                  model: AutoModelForCausalLM,
@@ -23,10 +24,16 @@ class ModelSummaryGenerator(SummaryGenerator):
         self.tokenizer = tokenizer
         self.model = model
         self.config = config
+        self.fields = [fname for _, fname, _, _ in string.Formatter().parse(self.config.prompt) if fname]
     
     @torch.inference_mode()
-    def generate(self, article: str) -> dict | None:
-        prompt_text = self.config.prompt.format(article=article)
+    def generate(self, example: dict) -> dict[str, str | list]:
+        format_args: dict[str, str] = {}
+        for field in self.fields:
+            if field not in example.keys():
+                raise KeyError(f"There is no {field} key in data")
+            format_args[field] = str(example[field])
+        prompt_text = self.config.prompt.format(**format_args)
         
         message = [
             { "role": "user", "content": prompt_text }
@@ -35,7 +42,10 @@ class ModelSummaryGenerator(SummaryGenerator):
 
         inputs = self.tokenizer.encode(prompt, return_tensors="pt").to(self.model.device)
         if inputs.shape[-1] + self.config.max_new_tokens > self.model.config.max_position_embeddings:
-            return None
+            result: dict[str, str | list] = example.copy()
+            result['prompt'] = prompt_text
+            result['generated'] = ""
+            return result
         
         attention_mask = torch.ones(inputs.shape, device=self.model.device)
 
@@ -52,28 +62,31 @@ class ModelSummaryGenerator(SummaryGenerator):
         ]
         output_texts = [text.strip() for text in output_texts if text.strip()]
 
-        return {"article": article, "prompt": prompt_text, "summaries": output_texts}
+        result: dict[str, str | list] = example.copy()
+        result['prompt'] = prompt_text
+        result['generated'] = output_texts
+        return result
     
     @torch.inference_mode()
-    def generate_batch(self, articles: Dataset) -> Dataset:
-        def f(example):
-            generation = self.generate(example['article'])
-            if generation is None:
-                return {"summaries": [], "prompt": ""}
-            return {k: v for k, v in generation.items() if k != 'article'}
-        return articles.map(f, num_proc=1, desc="Generating summaries")
+    def generate_batch(self, dataset: Dataset) -> Dataset:
+        def f(example: dict):
+            generation = self.generate(example)
+            return {k: v for k, v in generation.items() if k not in example.keys()}
+        return dataset.map(f, num_proc=1, desc="Generating summaries")
     
-class ReferenceSummaryGenerator(SummaryGenerator):
+class ReferenceSummaryGenerator(Generator):
     def __init__(self,
                  config: OmegaConf):
         self.config = config
         if self.config.num_return_sequences != 1:
             raise ValueError("ReferenceSummaryGenerator only supports num_return_sequences=1")
 
-    def generate(self, article: str) -> dict | None:
-        raise NotImplementedError("ReferenceSummaryGenerator does not support single generation")
+    def generate(self, example: dict) -> dict | None:
+        result: dict[str, str | list] = example.copy()
+        result['prompt'] = ""
+        result['generated'] = [result[self.config.ref_key]]
     
     def generate_batch(self, articles: Dataset) -> Dataset:
         def f(example):
-            return {"summaries": [example['reference']], "prompt": "Generated from reference"}
+            return {"generated": [example[self.config.ref_key]], "prompt": ""}
         return articles.map(f, num_proc=1, desc="Generating summaries")
