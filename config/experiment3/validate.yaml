@@ -1,0 +1,33 @@
+dataset_name: IMDB/val.csv
+
+result_dir: experiment2/validation
+
+validation:
+  ref_model_path: new_finetuned/checkpoint-20
+  nrow: 500
+  scorer:
+    type: openai
+    openai:
+      type: realtime
+      model: gpt-5-mini
+      prompt: |
+        You are an impartial evaluator. You will be given two movie review, Review 1 and Review 2.
+        Your task is to decide which response expresses a more positive attitude, tone, or sentiment.
+
+        After analyzing both responses, choose the one that is overall **more positive**.
+
+        Review 1:
+        {generated1}
+
+        Review 2:
+        {generated2}
+
+        FIRST provide a one-sentence comparison of the two reviews, explaining which is more positive and why. SECOND, on a new line, state only "1" or "2" to indicate your choice. Your response should use the format:
+        Comparison: <one-sentence comparison and explanation>
+        Preferred: <"1" or "2">
+      preference_pattern: "Preferred:\\s*[\"']?([12])[\"']?"
+  generation:
+    prompt: "Write a positive movie review starts with the following text: \"{prefix}\""
+    max_new_tokens: 256
+    num_return_sequences: 1
+    do_sample: False

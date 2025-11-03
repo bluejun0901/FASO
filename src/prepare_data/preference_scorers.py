@@ -207,7 +207,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             summary1 = y2 if swapped else y1
             summary2 = y1 if swapped else y2
 
-            user_prompt = self.prompt_template.format(prompt=prompt.group(1), summary1=summary1, summary2=summary2)
+            user_prompt = self.prompt_template.format(prompt=prompt.group(1), generated1=summary1, generated2=summary2)
             body = {
                 "model": self.model_name,
                 "input": user_prompt,
@@ -273,7 +273,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         pbar_total = self.total if self.total is not None else 0
         pbar = tqdm(total=pbar_total, desc="Batch progress", unit="req")
-
+ 
         while can_add_batch and pending and len(in_flight) < max_concurrent:
             submit = pending.pop(0)
             attempts[submit] = attempts.get(submit, 0) + 1
@@ -380,7 +380,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             return idx, None
         
         judged_idx = 0 if match.group(1) == "1" else 1
-        swapped = self.swapped[idx] if 0 <= idx < len(self.swapped) else False
+        swapped = True if obj.get("custom_id").split()[1] == "True" else False
         orig_idx = (1 - judged_idx) if swapped else judged_idx
         return idx, orig_idx
     

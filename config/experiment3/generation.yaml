@@ -1,13 +1,13 @@
-name: test
+name: experiment3
 
-model_name: new_finetuned/checkpoint-40
+model_name: new_finetuned/checkpoint-20
 
 dataset_name: IMDB/train.csv
-nrow: 3
+nrow: 5000
 
-dataset_output_dir: test/preprocessed
-model_output_dir: test
-log_dir: test
+dataset_output_dir: experiment3/processed
+model_output_dir: experiment3
+log_dir: experiment3
 
 generation:
   prompt: "Write a positive movie review starts with the following text: \"{prefix}\""
@@ -15,7 +15,7 @@ generation:
   temperature: 0.5
   top_p: 0.9
   top_k: 50
-  num_return_sequences: 4
+  num_return_sequences: 10
   do_sample: True
   no_repeat_ngram_size: 3
   repetition_penalty: 1.1

@@ -10,7 +10,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 import torch
 from transformers import AutoTokenizer

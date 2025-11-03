@@ -4,9 +4,9 @@ dataset_output_dir: test/preprocessed
 model_output_dir: test
 log_dir: test
 
-output_filename: train_acyclic_reason_kahn.json
+output_filename: train_acyclic_no_reason_kahn.json
 
 builder:
-  type: acyclic_reason
+  type: acyclic_no_reason
   acyclic_reason:
     cycle_removal: kahn

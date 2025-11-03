@@ -1,15 +1,13 @@
-name: test
+name: experiment3
 
-dataset_output_dir: test/preprocessed
-model_output_dir: test
-log_dir: test
+dataset_output_dir: experiment3/processed
+model_output_dir: experiment3
+log_dir: experiment3
 
 scorer:
   type: openai
-  rouge:
-    type: rougeL
   openai:
-    type: batch
+    type: realtime
     model: gpt-5-mini
     batch:
       max_request_per_batch: 25000

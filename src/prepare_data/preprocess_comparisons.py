@@ -81,7 +81,7 @@ if __name__ == "__main__":
         filename = f"{config.name}_comparison_{config.scorer.type}.jsonl"
         output_path = DATA_ROOT / config.dataset_output_dir / filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path = str(output_path)
+        output_path = Path(str(output_path))
         with open(output_path, "w", encoding="utf-8") as f:
             pass
     else:
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     else:
         print("Creating jsonl file for request...")
         preference_scorer = get_preference_scorer(config.scorer, openai_client=client)
-
+        
         comparisons = generate_comparisons(dataset, preference_scorer)
         comparisons = [comparison for comparison in comparisons if comparison['id'] not in cache]
         requests = preference_scorer.compare_batch_0(comparisons)
@@ -161,6 +161,7 @@ if __name__ == "__main__":
         print("Batch file Parsed")
         
         print(f"Saving result to {str(output_path)}...")
+        output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(str(output_path), "w", encoding="utf-8") as f:
             for pair, compare in zip(comparisons, compared):

@@ -1,0 +1,10 @@
+name: experiment3
+
+dataset_output_dir: experiment3/processed
+model_output_dir: experiment3
+log_dir: experiment3
+
+output_filename: train_cyclic.json
+
+builder:
+  type: cyclic

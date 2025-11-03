@@ -71,7 +71,7 @@ if __name__ == "__main__":
     dataset_path = DATA_ROOT / config.dataset_name
 
     print(f"Loading dataset from {dataset_path}...")
-    df = pd.read_csv(dataset_path / "validation.csv", nrows=config.validation.nrow)
+    df = pd.read_csv(dataset_path, nrows=config.validation.nrow)
     df = df.rename(columns=dict(config.col_renames))
     dataset = Dataset.from_pandas(df)
     print(f"Successfully loaded")

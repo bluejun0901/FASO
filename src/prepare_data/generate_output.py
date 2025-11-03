@@ -10,7 +10,7 @@ DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
 CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
 SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -42,17 +42,21 @@ if __name__ == "__main__":
     print(f"Loading model from {model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).to(device)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
     print("Model loaded successfully.")
 
     print(f"Loading dataset from {dataset_path}...")
     df = pd.read_csv(dataset_path, nrows=config.nrow if "nrow" in config else None)
     
-    df = df.rename(columns=dict(config.col_renames))
+    if OmegaConf.select(config, "col_renames"):
+        df = df.rename(columns=dict(OmegaConf.select(config, "col_renames")))
     
     dataset = Dataset.from_pandas(df)
     print("Dataset loaded successfully.")
     
     generator = ModelGenerator(tokenizer, model, config.generation)
+    print("Generating summaries...")
     dataset = generator.generate_batch(dataset)
     print("Summaries generated successfully.")
 
