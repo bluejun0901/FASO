@@ -8,28 +8,61 @@ from typing import Any
 
 
 class mTrainer(ABC):
+    """Abstract trainer interface for model fine-tuning workflows."""
+
     @abstractmethod
     def preprocess(self, dataset: Dataset | list[dict[str, str]]) -> Dataset:
+        """Prepare the dataset for training.
+
+        Args:
+            dataset (Dataset | list[dict[str, str]]): Input dataset or list of records.
+
+        Returns:
+            Dataset: Preprocessed dataset ready for training.
+        """
         pass
 
     @abstractmethod
     def train(self, output_dir: str, logging_dir: str) -> None:
+        """Train the model and persist outputs and logs.
+
+        Args:
+            output_dir (str): Directory where checkpoints will be saved.
+            logging_dir (str): Directory where logs will be written.
+        """
         pass
 
 
 class mDPOTrainer(mTrainer):
+    """Trainer implementation for Direct Preference Optimization (DPO)."""
+
     def __init__(
         self,
         tokenizer: Any,
         model: AutoModelForCausalLMWithValueHead,
         config: OmegaConf,
     ):
+        """Initialize the DPO trainer with tokenizer, model, and configuration.
+
+        Args:
+            tokenizer (Any): Tokenizer used for preprocessing.
+            model (AutoModelForCausalLMWithValueHead): Model to be trained.
+            config (OmegaConf): Training configuration parameters.
+        """
         self.tokenizer = tokenizer
         self.model = model
         self.config = config
         self.dataset = None
 
     def preprocess(self, dataset: Dataset | list[dict[str, str]]) -> Dataset:
+        """Convert input data into a Dataset compatible with the trainer.
+
+        Args:
+            dataset (Dataset | list[dict[str, str]]): Input dataset or list of records.
+
+        Returns:
+            Dataset: Dataset instance stored for subsequent training.
+        """
         if isinstance(dataset, list):
             self.dataset = Dataset.from_list(dataset)
         else:
@@ -38,6 +71,16 @@ class mDPOTrainer(mTrainer):
         return self.dataset
 
     def train(self, output_dir: str, logging_dir: str) -> None:
+        """Train the DPO model using the preprocessed dataset.
+
+        Args:
+            output_dir (str): Directory for saving model checkpoints.
+            logging_dir (str): Directory for logging training metrics.
+
+        Raises:
+            RuntimeError: If preprocessing has not been performed.
+            TypeError: If the resolved training configuration is invalid.
+        """
         if self.dataset is None:
             raise RuntimeError("You must call preprocess() before train().")
 
@@ -62,6 +105,19 @@ class mDPOTrainer(mTrainer):
 def get_m_trainer(
     config: OmegaConf, tokenizer: Any, model: AutoModelForCausalLMWithValueHead
 ) -> mTrainer:
+    """Instantiate a trainer based on configuration settings.
+
+    Args:
+        config (OmegaConf): Trainer configuration specifying the type.
+        tokenizer (Any): Tokenizer instance used for preprocessing.
+        model (AutoModelForCausalLMWithValueHead): Model to be trained.
+
+    Returns:
+        mTrainer: Trainer implementation matching the configuration.
+
+    Raises:
+        Exception: If the trainer type is not recognized.
+    """
     name = config.type.lower()
     if name == "dpo":
         return mDPOTrainer(tokenizer, model, config.dpo)

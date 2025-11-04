@@ -19,39 +19,94 @@ T = TypeVar("T")
 
 
 class PreferenceScorer(ABC):
+    """Abstract interface for scoring preferences between model outputs."""
+
     @abstractmethod
     def require_ref(self) -> bool:
+        """Indicate whether the scorer requires reference text.
+
+        Returns:
+            bool: True if reference text is needed, otherwise False.
+        """
         pass
 
     @abstractmethod
     def compare(
         self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
     ) -> int | None:
+        """Score a single pair of responses.
+
+        Args:
+            prompt (str): Prompt text associated with the responses.
+            y1 (str): First candidate response.
+            y2 (str): Second candidate response.
+            ref (str): Reference text if required by the scorer.
+            id (str | None): Optional identifier for the comparison.
+
+        Returns:
+            int | None: Preferred response index or None if undecided.
+        """
         pass
 
     @abstractmethod
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        """Score a batch of response pairs.
+
+        Args:
+            pairs (Union[list[dict], Dataset]): Iterable of comparison dictionaries.
+
+        Returns:
+            list[int | None]: Preference results for each comparison.
+        """
         pass
 
 
 class ROUGEPreferenceScorer(PreferenceScorer):
+    """Preference scorer that compares responses using ROUGE metrics."""
+
     def __init__(self, config: OmegaConf):
+        """Initialize the ROUGE scorer with configuration options.
+
+        Args:
+            config (OmegaConf): Configuration specifying the ROUGE variant.
+        """
         self.require_ref_flag = True
         self.rouge_type = config.type
         self.scorer = rouge_scorer.RougeScorer([self.rouge_type], use_stemmer=True)
 
     def require_ref(self):
+        """Return whether the scorer requires reference text."""
         return self.require_ref_flag
 
     def compare(
         self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
     ) -> int | None:
+        """Compare two responses using ROUGE and return the preferred index.
+
+        Args:
+            prompt (str): Prompt text associated with the responses.
+            y1 (str): First candidate response.
+            y2 (str): Second candidate response.
+            ref (str): Reference summary against which ROUGE is computed.
+            id (str | None): Optional identifier for the comparison.
+
+        Returns:
+            int | None: Index of the preferred response (0 or 1).
+        """
         s1 = self.scorer.score(ref, y1)[self.rouge_type].fmeasure
         s2 = self.scorer.score(ref, y2)[self.rouge_type].fmeasure
 
         return 0 if s1 > s2 else 1
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        """Compare a batch of response pairs using ROUGE scores.
+
+        Args:
+            pairs (Union[list[dict], Dataset]): Iterable of comparison dictionaries.
+
+        Returns:
+            list[int | None]: List of preferred indices for each pair.
+        """
         compared = []
         for pair in pairs:
             compared.append(
@@ -61,7 +116,15 @@ class ROUGEPreferenceScorer(PreferenceScorer):
 
 
 class OpenAIPreferenceScorer(PreferenceScorer):
+    """Preference scorer that queries the OpenAI Responses API."""
+
     def __init__(self, client: OpenAI, config: OmegaConf):
+        """Initialize the OpenAI scorer with client and configuration.
+
+        Args:
+            client (OpenAI): OpenAI client instance used for API calls.
+            config (OmegaConf): Configuration specifying prompts and model details.
+        """
         self.require_ref_flag = False
         self.client = client
         self.model_name = config.model
@@ -70,11 +133,27 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         self.pattern: str = config.preference_pattern
 
     def require_ref(self):
+        """Return whether the scorer requires reference text."""
         return self.require_ref_flag
 
     def compare(
         self, prompt: str, y1: str, y2: str, ref: str = "", id: str | None = None
     ) -> int | None:
+        """Compare two responses by querying the OpenAI model.
+
+        Args:
+            prompt (str): Prompt text presented to the judge.
+            y1 (str): First candidate response.
+            y2 (str): Second candidate response.
+            ref (str): Unused placeholder to match interface signature.
+            id (str | None): Optional identifier for the comparison.
+
+        Returns:
+            int | None: Index of the preferred response or None if undecided.
+
+        Raises:
+            ValueError: If the prompt cannot be parsed into the expected format.
+        """
         # Randomize which response is shown first to the judge
         swapped = random.choice([False, True])
         first = y2 if swapped else y1
@@ -106,6 +185,14 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         return (1 - judged_idx) if swapped else judged_idx
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        """Compare a batch of responses using sequential OpenAI requests.
+
+        Args:
+            pairs (Union[list[dict], Dataset]): Iterable of comparison dictionaries.
+
+        Returns:
+            list[int | None]: Preference results for each comparison.
+        """
         compared = []
         for pair in tqdm(pairs, desc="Comparing"):
             compared.append(self.compare(pair["prompt"], pair["y1"], pair["y2"]))  # type: ignore
@@ -113,17 +200,33 @@ class OpenAIPreferenceScorer(PreferenceScorer):
 
 
 class CachedPreferenceScorer(PreferenceScorer):
+    """Preference scorer that reads precomputed results from a cache file."""
+
     def __init__(self, comparison_file: str):
+        """Initialize the scorer with a path to cached comparisons.
+
+        Args:
+            comparison_file (str): Path to the file containing cached results.
+        """
         self.require_ref_flag = False
         self.comparison_file_path = comparison_file
         self._cache: dict[str, int] = {}
         self._load_file()
 
     def _normalize_id(self, s: str) -> str:
+        """Normalize comparison identifiers for consistent cache lookups.
+
+        Args:
+            s (str): Raw identifier string.
+
+        Returns:
+            str: Normalized identifier.
+        """
         parts = [p.strip() for p in s.split(",")]
         return ", ".join(parts)
 
     def _load_file(self) -> None:
+        """Load cached comparison results from disk."""
         self._cache.clear()
         with open(self.comparison_file_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -136,11 +239,28 @@ class CachedPreferenceScorer(PreferenceScorer):
                 self._cache[key] = val
 
     def require_ref(self):
+        """Return whether the scorer requires reference text."""
         return self.require_ref_flag
 
     def compare(
         self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
     ) -> int | None:
+        """Retrieve a cached comparison result.
+
+        Args:
+            prompt (str): Prompt text (unused but kept for interface).
+            y1 (str): First candidate response.
+            y2 (str): Second candidate response.
+            ref (str): Reference text (unused).
+            id (str | None): Identifier corresponding to the cached result.
+
+        Returns:
+            int | None: Cached preference label for the comparison.
+
+        Raises:
+            Exception: If the identifier is missing.
+            KeyError: If the identifier is not found in the cache.
+        """
         if id is None:
             raise Exception(
                 "'id' field must be included when calling CachedPreferenceScorer"
@@ -153,6 +273,14 @@ class CachedPreferenceScorer(PreferenceScorer):
         return self._cache[key]
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        """Retrieve cached comparison results for a batch.
+
+        Args:
+            pairs (Union[list[dict], Dataset]): Iterable of comparison dictionaries.
+
+        Returns:
+            list[int | None]: Cached preference labels for each comparison.
+        """
         compared: list[int | None] = []
         for pair in pairs:
             compared.append(
@@ -168,39 +296,67 @@ class CachedPreferenceScorer(PreferenceScorer):
 
 
 class BatchPreferenceScorer(PreferenceScorer):
+    """Base class for multi-step batch preference scorers."""
+
     @abstractmethod
     def require_ref(self) -> bool:
+        """Indicate whether the scorer requires reference text.
+
+        Returns:
+            bool: True if reference text is required.
+        """
         pass
 
     def compare(
         self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
     ) -> int | None:
+        """Disallow single comparison calls for batch scorers.
+
+        Raises:
+            Exception: Always raised to direct callers to batch methods.
+        """
         raise Exception(
             "BatchPreferenceScorer doesn't support 'compare'. Try calling compare_batch_* instead."
         )
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        """Disallow single-call batch comparisons for multi-step scorers.
+
+        Raises:
+            Exception: Always raised to direct callers to staged methods.
+        """
         raise Exception(
             "BatchPreferenceScorer doesn't support 'compare_batch'. Try calling compare_batch_* instead."
         )
 
     @abstractmethod
     def compare_batch_0(self, pairs: Union[list[dict], Dataset]) -> list[list[dict]]:
+        """Prepare API request payloads from comparison pairs."""
         pass
 
     @abstractmethod
     def compare_batch_1(
         self, paths: list[str], max_concurrent: int | None = None
     ) -> dict:
+        """Submit prepared payloads and monitor batch jobs."""
         pass
 
     @abstractmethod
     def compare_batch_2(self) -> list[int | None]:
+        """Parse batch results into preference labels."""
         pass
 
 
 class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
+    """Batch preference scorer that interacts with the OpenAI batch API."""
+
     def __init__(self, client: OpenAI, config: OmegaConf):
+        """Initialize the batch scorer with API client and configuration.
+
+        Args:
+            client (OpenAI): OpenAI client used to submit batch jobs.
+            config (OmegaConf): Configuration describing prompts and batching.
+        """
         self.require_ref_flag = False
         self.client = client
         self.model_name = config.model
@@ -230,9 +386,21 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.swapped: list[bool] = []
 
     def require_ref(self):
+        """Return whether the scorer requires reference text."""
         return self.require_ref_flag
 
     def compare_batch_0(self, pairs: Union[list[dict], Dataset]) -> list[list[dict]]:
+        """Chunk comparison pairs into request payloads for batch submission.
+
+        Args:
+            pairs (Union[list[dict], Dataset]): Iterable of comparison dictionaries.
+
+        Returns:
+            list[list[dict]]: Nested lists representing batched request bodies.
+
+        Raises:
+            ValueError: If a prompt does not match the expected parse pattern.
+        """
         requests = []
         self.total = len(pairs)
         for i, pair in enumerate(pairs):
@@ -275,6 +443,19 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         return requests
 
     def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:  # type: ignore
+        """Retry helper with exponential backoff for API calls.
+
+        Args:
+            fn (Callable[..., T]): Function to execute.
+            *args: Positional arguments forwarded to ``fn``.
+            **kwargs: Keyword arguments forwarded to ``fn``.
+
+        Returns:
+            T: Result returned by the invoked function.
+
+        Raises:
+            Exception: Propagates the last exception if retries are exhausted.
+        """
         delay = self.initial_backoff
         for i in range(self.max_retries):
             try:
@@ -286,6 +467,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                 delay *= 2
 
     def _submit_one(self, path: str) -> tuple[int, Batch]:
+        """Submit a single batch request file to the OpenAI API.
+
+        Args:
+            path (str): Path to the JSONL request file.
+
+        Returns:
+            tuple[int, Batch]: Pair of submission count increment and batch metadata.
+        """
         with open(path, "rb") as f:
             batch_file = self._retry(self.client.files.create, file=f, purpose="batch")
         batch = self._retry(
@@ -304,6 +493,15 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
     def compare_batch_1(
         self, paths: list[str], max_concurrent: int | None = None
     ) -> dict:
+        """Submit requests and monitor job progress until completion.
+
+        Args:
+            paths (list[str]): Paths to JSONL request files.
+            max_concurrent (int | None): Maximum simultaneous batch submissions.
+
+        Returns:
+            dict: Summary counts of batch job states.
+        """
         self.paths = list(paths)
         pending = list(paths)
         random.shuffle(pending)
@@ -423,6 +621,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         return count
 
     def _parse_output_line(self, line: str) -> tuple[int, int | None]:
+        """Parse a single line from the batch output file.
+
+        Args:
+            line (str): Raw JSONL line from the batch output.
+
+        Returns:
+            tuple[int, int | None]: Pair of index and judged preference.
+        """
         obj = json.loads(line)
         idx = int(obj.get("custom_id").split()[0])  # came from compare_batch_0
         body = obj.get("response", {}).get("body", {})
@@ -440,6 +646,11 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         return idx, orig_idx
 
     def compare_batch_2(self) -> list[int | None]:
+        """Parse completed batch outputs into preference labels.
+
+        Returns:
+            list[int | None]: Preference results aligned with original pairs.
+        """
         result: list[int | None] = [None for _ in range(len(self.pairs))]
 
         for b in self.batchs:
@@ -467,6 +678,18 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 def get_preference_scorer(
     config: OmegaConf, openai_client: OpenAI | None
 ) -> PreferenceScorer:
+    """Instantiate a preference scorer based on configuration.
+
+    Args:
+        config (OmegaConf): Configuration describing the scorer type.
+        openai_client (OpenAI | None): OpenAI client for API-based scorers.
+
+    Returns:
+        PreferenceScorer: Configured preference scorer instance.
+
+    Raises:
+        Exception: If the scorer type is not recognized or client is missing.
+    """
     if config.type.lower() == "rouge":
         return ROUGEPreferenceScorer(config.rouge)
     if config.type.lower() == "openai":
@@ -479,6 +702,14 @@ def get_preference_scorer(
 
 
 def is_preference_two_step(config: OmegaConf) -> bool:
+    """Return whether the configured scorer requires multi-step batching.
+
+    Args:
+        config (OmegaConf): Scorer configuration.
+
+    Returns:
+        bool: True if the scorer performs a two-step batch process.
+    """
     return (
         config.type.lower() == "openai"
         and getattr(config.openai, "type", "") == "batch"

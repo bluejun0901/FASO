@@ -3,12 +3,32 @@ from collections import deque
 
 
 def get_filename(*prefixes, suffix=".json"):
+    """Generate a timestamped filename with the provided prefixes.
+
+    Args:
+        *prefixes: Variable length tuple of string prefixes to include in the filename.
+        suffix (str): File extension or suffix to append to the filename.
+
+    Returns:
+        str: The constructed filename including prefixes, timestamp, and suffix.
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     prefix_str = "_".join(prefixes)
     return f"{prefix_str}_{timestamp}{suffix}"
 
 
 def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
+    """Remove cycles from a directed graph using Kahn's algorithm variant.
+
+    Args:
+        adj_list (list[list[int]]): Adjacency list representing the graph.
+
+    Returns:
+        list[list[int]]: Adjacency list of the resulting acyclic graph.
+
+    Raises:
+        AssertionError: If an unexpected state occurs while selecting nodes.
+    """
     n = len(adj_list)
 
     adj = [set(nei) for nei in adj_list]
@@ -71,11 +91,27 @@ def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
 
 
 def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
+    """Remove back edges from a directed graph via depth-first search.
+
+    Args:
+        adj_list (list[list[int]]): Adjacency list representing the graph.
+
+    Returns:
+        list[list[int]]: Adjacency list of the graph after removing cycles.
+    """
     n = len(adj_list)
     color = [0] * n
     removed: set[tuple[int, int]] = set()
 
     def dfs(u: int):
+        """Depth-first search helper that marks back edges for removal.
+
+        Args:
+            u (int): Current node being visited.
+
+        Returns:
+            None: The function updates the closure state in-place.
+        """
         color[u] = 1
         for v in adj_list[u]:
             if color[v] == 0:
@@ -105,6 +141,14 @@ def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
 
 # naive O(n! * n) implementation
 def remove_cycles_permutation(adj_list: list[list[int]]) -> list[list[int]]:
+    """Remove cycles by selecting the permutation maximizing forward edges.
+
+    Args:
+        adj_list (list[list[int]]): Adjacency list representing the graph.
+
+    Returns:
+        list[list[int]]: Adjacency list with edges consistent with the best order.
+    """
     from itertools import permutations
 
     n = len(adj_list)
@@ -156,6 +200,14 @@ def remove_cycles_permutation(adj_list: list[list[int]]) -> list[list[int]]:
 
 
 def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
+    """Remove cycles using an exponential-time dynamic programming approach.
+
+    Args:
+        adj_list (list[list[int]]): Adjacency list representing the graph.
+
+    Returns:
+        list[list[int]]: Adjacency list of a maximally acyclic subgraph.
+    """
     n = len(adj_list)
     if n == 0:
         return []
@@ -219,6 +271,17 @@ def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
 
 
 def add_transitive_edges(adj_list: list[list[int]]) -> list[list[int]]:
+    """Compute the transitive closure of a directed acyclic graph.
+
+    Args:
+        adj_list (list[list[int]]): Adjacency list representing a DAG.
+
+    Returns:
+        list[list[int]]: New adjacency list including transitive edges.
+
+    Raises:
+        AssertionError: If the graph cannot be topologically sorted.
+    """
     n = len(adj_list)
 
     indeg = [0] * n

@@ -32,6 +32,15 @@ SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve()  # type: ignore
 
 
 def get_summary_generator(model_path: str, generation_config: OmegaConf) -> Generator:
+    """Create a summary generator for the specified model path.
+
+    Args:
+        model_path (str): Path to a model directory or a reference keyword.
+        generation_config (OmegaConf): Configuration governing generation behavior.
+
+    Returns:
+        Generator: Instance capable of producing summaries for evaluation.
+    """
     model_path = model_path.strip()
     if model_path.lower().endswith("reference"):
         return ReferenceSummaryGenerator(generation_config)
@@ -118,6 +127,12 @@ if __name__ == "__main__":
     print("Existing results loaded.")
 
     def write_json_atomic(path: Path, data: list) -> None:
+        """Write JSON data atomically to avoid partial file updates.
+
+        Args:
+            path (Path): Destination file path.
+            data (list): Serializable data to be written as JSON.
+        """
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         with open(str(tmp_path), "w") as f:
             json.dump(data, f, indent=2)

@@ -18,7 +18,15 @@ print("Logged scalars:", event_acc.Tags()["scalars"])
 
 
 def ema(values, alpha=0.98):
-    """Exponential Moving Average smoothing"""
+    """Compute an exponential moving average of the provided values.
+
+    Args:
+        values (Iterable[float]): Sequence of numeric values to smooth.
+        alpha (float): Smoothing factor between 0 and 1.
+
+    Returns:
+        list[float]: Smoothed sequence using exponential moving average.
+    """
     smoothed = []
     m = None
     for v in values:
@@ -28,6 +36,13 @@ def ema(values, alpha=0.98):
 
 
 def save_fig(tag, event_acc, save_path):
+    """Save a figure for a TensorBoard scalar tag with smoothing applied.
+
+    Args:
+        tag (str): Scalar tag name to visualize.
+        event_acc (EventAccumulator): Event accumulator providing scalar data.
+        save_path (str): Filesystem path where the figure will be saved.
+    """
     try:
         events = event_acc.Scalars(tag)
     except KeyError:
