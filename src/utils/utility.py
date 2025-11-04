@@ -1,10 +1,12 @@
 from datetime import datetime
 from collections import deque
 
+
 def get_filename(*prefixes, suffix=".json"):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     prefix_str = "_".join(prefixes)
     return f"{prefix_str}_{timestamp}{suffix}"
+
 
 def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)
@@ -29,7 +31,6 @@ def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
                 continue
             remaining_nodes.discard(u)
             for v in list(adj[u]):
-
                 adj[u].discard(v)
                 indeg[v] -= 1
                 if indeg[v] == 0:
@@ -41,7 +42,7 @@ def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
         best_u = None
         best_score = None
         for u in list(remaining_nodes):
-            score = (len(adj[u]) - indeg[u])
+            score = len(adj[u]) - indeg[u]
             if best_score is None or score > best_score:
                 best_score = score
                 best_u = u
@@ -61,12 +62,13 @@ def remove_cycles_kahn(adj_list: list[list[int]]) -> list[list[int]]:
 
     out_adj: list[list[int]] = [[] for _ in range(n)]
     buckets = [[] for _ in range(n)]
-    for (u, v) in kept:
+    for u, v in kept:
         buckets[u].append(v)
     for u in range(n):
         out_adj[u] = buckets[u]
 
     return out_adj
+
 
 def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)
@@ -93,12 +95,13 @@ def remove_cycles_dfs(adj_list: list[list[int]]) -> list[list[int]]:
 
     out_adj: list[list[int]] = [[] for _ in range(n)]
     buckets = [[] for _ in range(n)]
-    for (u, v) in kept:
+    for u, v in kept:
         buckets[u].append(v)
     for u in range(n):
         out_adj[u] = buckets[u]
 
     return out_adj
+
 
 # naive O(n! * n) implementation
 def remove_cycles_permutation(adj_list: list[list[int]]) -> list[list[int]]:
@@ -151,6 +154,7 @@ def remove_cycles_permutation(adj_list: list[list[int]]) -> list[list[int]]:
 
     return out_adj
 
+
 def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)
     if n == 0:
@@ -161,11 +165,11 @@ def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
     for u in range(n):
         for v in adj_list[u]:
             if 0 <= v < n and v != u:
-                in_mask[v] |= (1 << u)
+                in_mask[v] |= 1 << u
 
     full = (1 << n) - 1
     # dp[mask] = max number of forward edges achievable using exactly the vertices in 'mask'
-    dp = [-10**18] * (1 << n)
+    dp = [-(10**18)] * (1 << n)
     best_last = [-1] * (1 << n)  # which vertex is placed last for the optimal dp[mask]
     dp[0] = 0
 
@@ -175,7 +179,7 @@ def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
         m = mask
         while m:
             v_bit = m & -m
-            v = (v_bit.bit_length() - 1)
+            v = v_bit.bit_length() - 1
             prev = mask ^ v_bit
             # if v is last, edges counted are all from 'prev' into v
             gain = (in_mask[v] & prev).bit_count()
@@ -194,7 +198,7 @@ def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
             # fallback (shouldn't happen), pick any set bit
             v = (cur & -cur).bit_length() - 1
         order_rev.append(v)
-        cur ^= (1 << v)
+        cur ^= 1 << v
     order = order_rev[::-1]  # now from first to last
 
     # Keep only edges that go forward under this order
@@ -212,6 +216,7 @@ def remove_cycles_expodential(adj_list: list[list[int]]) -> list[list[int]]:
                 dag[u].append(v)
 
     return dag
+
 
 def add_transitive_edges(adj_list: list[list[int]]) -> list[list[int]]:
     n = len(adj_list)

@@ -1,13 +1,15 @@
 from datasets import Dataset
 
-from src.utils.utility import *
-from src.prepare_data.preference_scorers import *
-from src.prepare_data.output_generator import *
+from src.prepare_data.preference_scorers import PreferenceScorer
+from src.prepare_data.output_generator import Generator
+
 
 class WinRateCalculator:
-    def __init__(self, 
-                 ref_generator: Generator | None=None,
-                 target_generator: Generator | None=None):
+    def __init__(
+        self,
+        ref_generator: Generator | None = None,
+        target_generator: Generator | None = None,
+    ):
         self.ref_generator = ref_generator
         self.target_generator = target_generator
         self.dataset: Dataset | None = None
@@ -38,26 +40,33 @@ class WinRateCalculator:
         self.target_responses = self.target_generator.generate_batch(self.dataset)
 
     # win rate for targetgenerator
-    def calculate_win_rate(self, prompts: Dataset, scorer: PreferenceScorer) -> tuple[float, list[int | None]]:
+    def calculate_win_rate(
+        self, prompts: Dataset, scorer: PreferenceScorer
+    ) -> tuple[float, list[int | None]]:
         if self.ref_responses is None or self.target_responses is None:
             raise RuntimeError("No responses generated")
         if len(self.ref_responses) != len(self.target_responses):
             raise RuntimeError("Response size mismatch")
-        
+
         n = len(prompts)
         ref_responses = self.ref_responses
         target_responses = self.target_responses
 
         pairs: list[dict] = []
         for i in range(n):
-            if len(ref_responses[i]['generated']) > 0 and len(target_responses[i]['generated']) > 0:
-                pairs.append({
-                    'prompt': prompts[i]['prompt'],
-                    'y1': ref_responses[i]['generated'][0],
-                    'y2': target_responses[i]['generated'][0],
-                    'ref': prompts[i]['reference'] if scorer.require_ref() else "",
-                    'meta': f"{i}, {i}, {i}"
-                })
+            if (
+                len(ref_responses[i]["generated"]) > 0
+                and len(target_responses[i]["generated"]) > 0
+            ):
+                pairs.append(
+                    {
+                        "prompt": prompts[i]["prompt"],
+                        "y1": ref_responses[i]["generated"][0],
+                        "y2": target_responses[i]["generated"][0],
+                        "ref": prompts[i]["reference"] if scorer.require_ref() else "",
+                        "meta": f"{i}, {i}, {i}",
+                    }
+                )
 
         res = scorer.compare_batch(pairs)
 
@@ -70,4 +79,3 @@ class WinRateCalculator:
                 win += 1
 
         return (win / total, res)
-                

@@ -2,15 +2,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
-load_dotenv()
-
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
-CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
-LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve() # type: ignore
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 import torch
 from transformers import AutoTokenizer
@@ -18,23 +9,24 @@ from trl import AutoModelForCausalLMWithValueHead
 
 from datasets import Dataset
 import json
-from src.utils.utility import *
-from src.train.trainers import *
+from src.train.trainers import get_m_trainer
 
 from omegaconf import OmegaConf
+
+load_dotenv()
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()  # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()  # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve()  # type: ignore
+CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve()  # type: ignore
+LOG_ROOT = Path(os.getenv("LOG_ROOT")).resolve()  # type: ignore
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "config_path", 
-        type=str, 
-        help="reletive path to configuration file"
+        "config_path", type=str, help="reletive path to configuration file"
     )
-    parser.add_argument(
-        "dataset_path",
-        type=str,
-        help="reletive path to train dataset"
-    )
+    parser.add_argument("dataset_path", type=str, help="reletive path to train dataset")
     args = parser.parse_args()
 
     config = OmegaConf.load(CONFIG_ROOT / args.config_path)
@@ -45,7 +37,9 @@ if __name__ == "__main__":
 
     print(f"Loading model from {model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(str(model_path), trust_remote_code=True).to(device)
+    model = AutoModelForCausalLMWithValueHead.from_pretrained(
+        str(model_path), trust_remote_code=True
+    ).to(device)
     model.warnings_issued = {}
     print("Model loaded successfully.")
 

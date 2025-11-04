@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
 
-import torch
 from trl import AutoModelForCausalLMWithValueHead, DPOTrainer, DPOConfig
 
 from datasets import Dataset
 from omegaconf import OmegaConf
 from typing import Any
 
-from src.utils.utility import *
 
 class mTrainer(ABC):
     @abstractmethod
@@ -18,11 +16,14 @@ class mTrainer(ABC):
     def train(self, output_dir: str, logging_dir: str) -> None:
         pass
 
+
 class mDPOTrainer(mTrainer):
-    def __init__(self,
-                 tokenizer: Any,
-                 model: AutoModelForCausalLMWithValueHead,
-                 config: OmegaConf):
+    def __init__(
+        self,
+        tokenizer: Any,
+        model: AutoModelForCausalLMWithValueHead,
+        config: OmegaConf,
+    ):
         self.tokenizer = tokenizer
         self.model = model
         self.config = config
@@ -35,7 +36,7 @@ class mDPOTrainer(mTrainer):
             assert isinstance(dataset, Dataset)
             self.dataset = dataset
         return self.dataset
-    
+
     def train(self, output_dir: str, logging_dir: str) -> None:
         if self.dataset is None:
             raise RuntimeError("You must call preprocess() before train().")
@@ -46,22 +47,21 @@ class mDPOTrainer(mTrainer):
         train_config = {str(k): v for k, v in train_config.items()}
 
         training_args = DPOConfig(
-            output_dir=output_dir,
-            logging_dir=logging_dir,
-            **train_config
+            output_dir=output_dir, logging_dir=logging_dir, **train_config
         )
         trainer = DPOTrainer(
             model=self.model,
-            args=training_args, 
-            processing_class=self.tokenizer, 
+            args=training_args,
+            processing_class=self.tokenizer,
             train_dataset=self.dataset,
         )
-        
+
         trainer.train()
 
-def get_m_trainer(config: OmegaConf,
-                  tokenizer: Any,
-                  model: AutoModelForCausalLMWithValueHead) -> mTrainer:
+
+def get_m_trainer(
+    config: OmegaConf, tokenizer: Any, model: AutoModelForCausalLMWithValueHead
+) -> mTrainer:
     name = config.type.lower()
     if name == "dpo":
         return mDPOTrainer(tokenizer, model, config.dpo)

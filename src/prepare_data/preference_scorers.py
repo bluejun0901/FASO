@@ -14,42 +14,52 @@ import json
 from tqdm import tqdm
 
 from omegaconf import OmegaConf
+
 T = TypeVar("T")
+
 
 class PreferenceScorer(ABC):
     @abstractmethod
     def require_ref(self) -> bool:
         pass
-    
+
     @abstractmethod
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None=None) -> int | None:
+    def compare(
+        self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
+    ) -> int | None:
         pass
-    
+
     @abstractmethod
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         pass
-    
+
+
 class ROUGEPreferenceScorer(PreferenceScorer):
     def __init__(self, config: OmegaConf):
         self.require_ref_flag = True
         self.rouge_type = config.type
         self.scorer = rouge_scorer.RougeScorer([self.rouge_type], use_stemmer=True)
-        
+
     def require_ref(self):
         return self.require_ref_flag
-                        
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None=None) -> int | None:
+
+    def compare(
+        self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
+    ) -> int | None:
         s1 = self.scorer.score(ref, y1)[self.rouge_type].fmeasure
         s2 = self.scorer.score(ref, y2)[self.rouge_type].fmeasure
 
         return 0 if s1 > s2 else 1
-    
+
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
         for pair in pairs:
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'])) # type: ignore
+            compared.append(
+                self.compare(pair["prompt"], pair["y1"], pair["y2"], pair["ref"])  # type: ignore
+            )  # type: ignore
         return compared
-    
+
+
 class OpenAIPreferenceScorer(PreferenceScorer):
     def __init__(self, client: OpenAI, config: OmegaConf):
         self.require_ref_flag = False
@@ -58,29 +68,33 @@ class OpenAIPreferenceScorer(PreferenceScorer):
         self.prompt_template = config.prompt
         self.prompt_parse = config.prompt_parse
         self.pattern: str = config.preference_pattern
-        
+
     def require_ref(self):
         return self.require_ref_flag
-                      
-    def compare(self, prompt: str, y1: str, y2: str, ref: str="", id: str | None=None) -> int | None:
+
+    def compare(
+        self, prompt: str, y1: str, y2: str, ref: str = "", id: str | None = None
+    ) -> int | None:
         # Randomize which response is shown first to the judge
         swapped = random.choice([False, True])
         first = y2 if swapped else y1
         second = y1 if swapped else y2
         parsed_prompt = re.match(self.prompt_parse, prompt)
         if not parsed_prompt:
-            raise ValueError(f"Prompt does not match the expected format: {self.prompt_parse}")
-        user_prompt = self.prompt_template.format(prompt=parsed_prompt.group(1), generated1=first, generated2=second)
+            raise ValueError(
+                f"Prompt does not match the expected format: {self.prompt_parse}"
+            )
+        user_prompt = self.prompt_template.format(
+            prompt=parsed_prompt.group(1), generated1=first, generated2=second
+        )
 
         response = self.client.responses.create(
             model=self.model_name,
             input=user_prompt,
-            reasoning={
-                "effort": "minimal"
-            },
-            max_output_tokens=128
+            reasoning={"effort": "minimal"},
+            max_output_tokens=128,
         )
-        output_text = response.output[1].content[0].text #type: ignore
+        output_text = response.output[1].content[0].text  # type: ignore
         assert output_text is not None
 
         match = re.search(self.pattern, output_text)
@@ -94,9 +108,10 @@ class OpenAIPreferenceScorer(PreferenceScorer):
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared = []
         for pair in tqdm(pairs, desc="Comparing"):
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'])) #type: ignore
+            compared.append(self.compare(pair["prompt"], pair["y1"], pair["y2"]))  # type: ignore
         return compared
-    
+
+
 class CachedPreferenceScorer(PreferenceScorer):
     def __init__(self, comparison_file: str):
         self.require_ref_flag = False
@@ -123,42 +138,66 @@ class CachedPreferenceScorer(PreferenceScorer):
     def require_ref(self):
         return self.require_ref_flag
 
-    def compare(self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None) -> int | None:
+    def compare(
+        self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
+    ) -> int | None:
         if id is None:
-            raise Exception("'id' field must be included when calling CachedPreferenceScorer")
+            raise Exception(
+                "'id' field must be included when calling CachedPreferenceScorer"
+            )
         key = self._normalize_id(str(id))
         if key not in self._cache:
-            raise KeyError(f"Comparison id '{key}' not found in {self.comparison_file_path}")
+            raise KeyError(
+                f"Comparison id '{key}' not found in {self.comparison_file_path}"
+            )
         return self._cache[key]
 
     def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
         compared: list[int | None] = []
         for pair in pairs:
-            compared.append(self.compare(pair['prompt'], pair['y1'], pair['y2'], pair['ref'], pair['id']))  # type: ignore
+            compared.append(
+                self.compare(
+                    pair["prompt"],  # type: ignore
+                    pair["y1"],  # type: ignore
+                    pair["y2"],  # type: ignore
+                    pair["ref"],  # type: ignore
+                    pair["id"],  # type: ignore
+                )
+            )  # type: ignore
         return compared
-    
+
+
 class BatchPreferenceScorer(PreferenceScorer):
     @abstractmethod
     def require_ref(self) -> bool:
         pass
 
-    def compare(self, prompt: str, y1: str, y2: str, ref: str) -> int | None:
-        raise Exception("BatchPreferenceScorer doesn't support 'compare'. Try calling compare_batch_* instead.")
+    def compare(
+        self, prompt: str, y1: str, y2: str, ref: str, id: str | None = None
+    ) -> int | None:
+        raise Exception(
+            "BatchPreferenceScorer doesn't support 'compare'. Try calling compare_batch_* instead."
+        )
 
-    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int]:
-        raise Exception("BatchPreferenceScorer doesn't support 'compare_batch'. Try calling compare_batch_* instead.")
-    
+    def compare_batch(self, pairs: Union[list[dict], Dataset]) -> list[int | None]:
+        raise Exception(
+            "BatchPreferenceScorer doesn't support 'compare_batch'. Try calling compare_batch_* instead."
+        )
+
     @abstractmethod
     def compare_batch_0(self, pairs: Union[list[dict], Dataset]) -> list[list[dict]]:
         pass
 
     @abstractmethod
-    def compare_batch_1(self, path: list[str]) -> dict:
+    def compare_batch_1(
+        self, paths: list[str], max_concurrent: int | None = None
+    ) -> dict:
         pass
 
     @abstractmethod
     def compare_batch_2(self) -> list[int | None]:
         pass
+
 
 class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
     def __init__(self, client: OpenAI, config: OmegaConf):
@@ -171,9 +210,15 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         c = getattr(config, "batch", None)
         self.max_concurrent = getattr(c, "max_concurrent", 3) if c is not None else 3
         self.max_retries = getattr(c, "max_retries", 5) if c is not None else 5
-        self.initial_backoff = getattr(c, "initial_backoff", 1.0) if c is not None else 1.0
-        self.poll_interval = getattr(c, "poll_interval", 15.0) if c is not None else 15.0
-        self.max_request_size = getattr(c, "max_request_per_batch", 30000) if c is not None else 30000
+        self.initial_backoff = (
+            getattr(c, "initial_backoff", 1.0) if c is not None else 1.0
+        )
+        self.poll_interval = (
+            getattr(c, "poll_interval", 15.0) if c is not None else 15.0
+        )
+        self.max_request_size = (
+            getattr(c, "max_request_per_batch", 30000) if c is not None else 30000
+        )
 
         self.paths = []
         self.batch_files = []
@@ -183,7 +228,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         self.pairs = []
 
         self.swapped: list[bool] = []
-    
+
     def require_ref(self):
         return self.require_ref_flag
 
@@ -195,11 +240,13 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             if i % self.max_request_size == 0:
                 requests.append([])
 
-            prompt = re.match(self.prompt_parse, pair['prompt']) # type: ignore
+            prompt = re.match(self.prompt_parse, pair["prompt"])  # type: ignore
             if not prompt:
-                raise ValueError(f"Prompt does not match the expected format: {self.prompt_parse}")
-            y1 = pair['y1'] # type: ignore
-            y2 = pair['y2'] # type: ignore
+                raise ValueError(
+                    f"Prompt does not match the expected format: {self.prompt_parse}"
+                )
+            y1 = pair["y1"]  # type: ignore
+            y2 = pair["y2"]  # type: ignore
 
             # Randomize presentation order per pair and record mapping
             swapped = random.choice([False, True])
@@ -207,25 +254,27 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
             summary1 = y2 if swapped else y1
             summary2 = y1 if swapped else y2
 
-            user_prompt = self.prompt_template.format(prompt=prompt.group(1), generated1=summary1, generated2=summary2)
+            user_prompt = self.prompt_template.format(
+                prompt=prompt.group(1), generated1=summary1, generated2=summary2
+            )
             body = {
                 "model": self.model_name,
                 "input": user_prompt,
-                "reasoning": {
-                    "effort": "minimal"
-                },
-                "max_output_tokens": 128
+                "reasoning": {"effort": "minimal"},
+                "max_output_tokens": 128,
             }
-            requests[i // self.max_request_size].append({
-                "custom_id": f"{i} {swapped}",
-                "method": "POST",
-                "url": "/v1/responses",
-                "body": body
-            })
+            requests[i // self.max_request_size].append(
+                {
+                    "custom_id": f"{i} {swapped}",
+                    "method": "POST",
+                    "url": "/v1/responses",
+                    "body": body,
+                }
+            )
 
         return requests
-    
-    def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T: # type: ignore
+
+    def _retry(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:  # type: ignore
         delay = self.initial_backoff
         for i in range(self.max_retries):
             try:
@@ -247,10 +296,14 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         )
         self.batch_files.append(batch_file)
         self.batchs.append(batch)
-        tqdm.write(f"file {path} (file id: {batch_file.id}) submitted (batch id: {batch.id})")
+        tqdm.write(
+            f"file {path} (file id: {batch_file.id}) submitted (batch id: {batch.id})"
+        )
         return (1, batch)
 
-    def compare_batch_1(self, paths: list[str], max_concurrent: int | None = None) -> dict:
+    def compare_batch_1(
+        self, paths: list[str], max_concurrent: int | None = None
+    ) -> dict:
         self.paths = list(paths)
         pending = list(paths)
         random.shuffle(pending)
@@ -273,7 +326,7 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         pbar_total = self.total if self.total is not None else 0
         pbar = tqdm(total=pbar_total, desc="Batch progress", unit="req")
- 
+
         while can_add_batch and pending and len(in_flight) < max_concurrent:
             submit = pending.pop(0)
             attempts[submit] = attempts.get(submit, 0) + 1
@@ -335,11 +388,13 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
                     if delta > 0:
                         pbar.update(delta)
                         last_completed += delta
-                    pbar.set_postfix({
-                        "failed": agg_counts["failed"],
-                        "running": len(in_flight),
-                        "finished": len(finished),
-                    })
+                    pbar.set_postfix(
+                        {
+                            "failed": agg_counts["failed"],
+                            "running": len(in_flight),
+                            "finished": len(finished),
+                        }
+                    )
 
                 while can_add_batch and pending and len(in_flight) < max_concurrent:
                     submit = pending.pop(0)
@@ -378,17 +433,19 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
         match = re.search(self.pattern, output_text)
         if not match:
             return idx, None
-        
+
         judged_idx = 0 if match.group(1) == "1" else 1
         swapped = True if obj.get("custom_id").split()[1] == "True" else False
         orig_idx = (1 - judged_idx) if swapped else judged_idx
         return idx, orig_idx
-    
+
     def compare_batch_2(self) -> list[int | None]:
         result: list[int | None] = [None for _ in range(len(self.pairs))]
 
         for b in self.batchs:
-            if getattr(b, "status", None) == "completed" and getattr(b, "output_file_id", None):
+            if getattr(b, "status", None) == "completed" and getattr(
+                b, "output_file_id", None
+            ):
                 content_resp = self._retry(self.client.files.content, b.output_file_id)
                 data = getattr(content_resp, "text", None)
                 if data is None:
@@ -406,7 +463,10 @@ class OpenAIBatchPreferenceScorer(BatchPreferenceScorer):
 
         return result
 
-def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> PreferenceScorer:
+
+def get_preference_scorer(
+    config: OmegaConf, openai_client: OpenAI | None
+) -> PreferenceScorer:
     if config.type.lower() == "rouge":
         return ROUGEPreferenceScorer(config.rouge)
     if config.type.lower() == "openai":
@@ -417,5 +477,9 @@ def get_preference_scorer(config: OmegaConf, openai_client: OpenAI | None) -> Pr
             return OpenAIBatchPreferenceScorer(openai_client, config.openai)
     raise Exception("Unknown scorer")
 
+
 def is_preference_two_step(config: OmegaConf) -> bool:
-    return config.type.lower() == "openai" and getattr(config.openai, "type", "") == "batch"
+    return (
+        config.type.lower() == "openai"
+        and getattr(config.openai, "type", "") == "batch"
+    )

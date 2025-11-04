@@ -16,6 +16,7 @@ event_acc.Reload()
 # scalar tags
 print("Logged scalars:", event_acc.Tags()["scalars"])
 
+
 def ema(values, alpha=0.98):
     """Exponential Moving Average smoothing"""
     smoothed = []
@@ -24,6 +25,7 @@ def ema(values, alpha=0.98):
         m = v if m is None else alpha * m + (1 - alpha) * v
         smoothed.append(m)
     return smoothed
+
 
 def save_fig(tag, event_acc, save_path):
     try:
@@ -48,13 +50,14 @@ def save_fig(tag, event_acc, save_path):
     smoothed = ema(values, alpha=0.98)
     plt.plot(steps, smoothed, label=f"{tag} (EMA)")
     plt.xlabel("Training Step")
-    plt.ylabel("Value")            # <- y라벨은 값 이름으로 통일
+    plt.ylabel("Value")  # <- y라벨은 값 이름으로 통일
     plt.title(f"{tag} over Training Steps")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
-    plt.close()                    # <- 반드시 닫아주기
+    plt.close()  # <- 반드시 닫아주기
+
 
 graph_dir = PROJECT_ROOT / input("input path: ")
 os.makedirs(graph_dir, exist_ok=True)

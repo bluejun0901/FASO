@@ -1,9 +1,8 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 import torch
 from transformers import AutoTokenizer
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 from huggingface_hub import login
@@ -13,26 +12,28 @@ import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 
-from pathlib import Path
 
 load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve() # type: ignore
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()  # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()  # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).expanduser().resolve()  # type: ignore
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def process_one_data(data: dict, 
-                     tokenizer: AutoTokenizer) -> dict:
-    prompt = data['article']
+
+def process_one_data(data: dict, tokenizer: AutoTokenizer) -> dict:
+    prompt = data["article"]
     response = data["highlights"]
     full_text = tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt}, {"role": "assistant", "content": response}],
+        [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": response},
+        ],
         tokenize=False,
     )
 
-    tokenized = tokenizer( # type: ignore
+    tokenized = tokenizer(  # type: ignore
         full_text,
         truncation=True,
         padding="max_length",
@@ -43,7 +44,9 @@ def process_one_data(data: dict,
         [{"role": "user", "content": prompt}],
         tokenize=False,
     )
-    prompt_len = len(tokenizer(prompt_only, truncation=True, max_length=512)["input_ids"]) # type: ignore
+    prompt_len = len(
+        tokenizer(prompt_only, truncation=True, max_length=512)["input_ids"]  # type: ignore
+    )
 
     labels = tokenized["input_ids"].copy()
     labels[:prompt_len] = [-100] * prompt_len
@@ -51,8 +54,8 @@ def process_one_data(data: dict,
 
     return tokenized
 
-def preprocess_dataset(dataset: Dataset,
-                       tokenizer: AutoTokenizer) -> Dataset:
+
+def preprocess_dataset(dataset: Dataset, tokenizer: AutoTokenizer) -> Dataset:
     """
     Preprocess the dataset by applying the process_one_date function to each example.
     """
@@ -64,19 +67,20 @@ def preprocess_dataset(dataset: Dataset,
         fn_kwargs={"tokenizer": tokenizer},
     )
 
+
 if __name__ == "__main__":
     login(token=os.getenv("HF_TOKEN"))
 
-    # load model and tokenizer 
+    # load model and tokenizer
     print("loading model")
-    model_path = MODEL_ROOT / 'sft' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
+    model_path = MODEL_ROOT / "sft" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"
     tokenizer = AutoTokenizer.from_pretrained(str(model_path))
     model = AutoModelForCausalLM.from_pretrained(str(model_path)).to(device)
     model.warnings_issued = {}
     print("model loaded")
 
     print("loading dataet")
-    dataset_path = DATA_ROOT / '.kaggle' / 'cnn_dailymail' / 'train.csv'
+    dataset_path = DATA_ROOT / ".kaggle" / "cnn_dailymail" / "train.csv"
     df = pd.read_csv(dataset_path)  # Load subset of dataset
     dataset = Dataset.from_pandas(df)
     print("dataset loaded")
@@ -85,7 +89,9 @@ if __name__ == "__main__":
     dataset = preprocess_dataset(dataset, tokenizer)
     print("dataset preprocessed")
 
-    output_dir = MODEL_ROOT / 'finetuned-no-prompt' / 'TinyLlama' / 'TinyLlama-1.1B-Chat-v1.0'
+    output_dir = (
+        MODEL_ROOT / "finetuned-no-prompt" / "TinyLlama" / "TinyLlama-1.1B-Chat-v1.0"
+    )
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
@@ -96,14 +102,14 @@ if __name__ == "__main__":
         save_strategy="steps",
         save_steps=200,
         save_total_limit=5,
-        fp16=True
+        fp16=True,
     )
 
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer # type: ignore
+        tokenizer=tokenizer,  # type: ignore
     )
 
     print("starting training")

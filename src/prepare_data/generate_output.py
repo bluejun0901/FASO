@@ -2,15 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import argparse
-load_dotenv()
 
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve() # type: ignore
-MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve() # type: ignore
-DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve() # type: ignore
-CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve() # type: ignore
-SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve() # type: ignore
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -18,18 +10,23 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import Dataset
 import pandas as pd
 import json
-from src.utils.utility import *
 
 from omegaconf import OmegaConf
 
-from src.prepare_data.output_generator import *
+from src.prepare_data.output_generator import ModelGenerator
+
+load_dotenv()
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT")).resolve()  # type: ignore
+MODEL_ROOT = Path(os.getenv("MODEL_ROOT")).resolve()  # type: ignore
+DATA_ROOT = Path(os.getenv("DATA_ROOT")).resolve()  # type: ignore
+CONFIG_ROOT = Path(os.getenv("CONFIG_ROOT")).resolve()  # type: ignore
+SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve()  # type: ignore
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "config_path", 
-        type=str, 
-        help="reletive path to configuration file"
+        "config_path", type=str, help="reletive path to configuration file"
     )
     args = parser.parse_args()
 
@@ -41,20 +38,22 @@ if __name__ == "__main__":
 
     print(f"Loading model from {model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).to(
+        device
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     print("Model loaded successfully.")
 
     print(f"Loading dataset from {dataset_path}...")
     df = pd.read_csv(dataset_path, nrows=config.nrow if "nrow" in config else None)
-    
+
     if OmegaConf.select(config, "col_renames"):
         df = df.rename(columns=dict(OmegaConf.select(config, "col_renames")))
-    
+
     dataset = Dataset.from_pandas(df)
     print("Dataset loaded successfully.")
-    
+
     generator = ModelGenerator(tokenizer, model, config.generation)
     print("Generating summaries...")
     dataset = generator.generate_batch(dataset)
@@ -64,6 +63,6 @@ if __name__ == "__main__":
     gen_output_path = DATA_ROOT / config.dataset_output_dir / gen_filename
     print(f"Saving generated summeries to {str(gen_output_path)}...")
     gen_output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(str(gen_output_path), 'w', encoding="utf-8") as f:
+    with open(str(gen_output_path), "w", encoding="utf-8") as f:
         json.dump(dataset.to_dict(), f, ensure_ascii=False, indent=2)
     print("Saved successfully")
