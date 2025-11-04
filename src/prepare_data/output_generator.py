@@ -97,7 +97,7 @@ class ReferenceSummaryGenerator(Generator):
         result['prompt'] = ""
         result['generated'] = [result[self.config.ref_key]]
     
-    def generate_batch(self, articles: Dataset) -> Dataset:
+    def generate_batch(self, dataset: Dataset) -> Dataset:
         def f(example):
             return {"generated": [example[self.config.ref_key]], "prompt": ""}
-        return articles.map(f, num_proc=1, desc="Generating summaries")
+        return dataset.map(f, num_proc=1, desc="Generating summaries")

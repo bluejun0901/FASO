@@ -2,6 +2,9 @@ dataset_name: IMDB/val.csv
 
 result_dir: experiment2/validation
 
+col_renames:
+  review: review
+
 validation:
   ref_model_path: new_finetuned/checkpoint-20
   nrow: 500
@@ -10,6 +13,7 @@ validation:
     openai:
       type: realtime
       model: gpt-5-mini
+      prompt_parse: "^(\\S+(?:\\s+\\S+){0,4})"
       prompt: |
         You are an impartial evaluator. You will be given two movie review, Review 1 and Review 2.
         Your task is to decide which response expresses a more positive attitude, tone, or sentiment.

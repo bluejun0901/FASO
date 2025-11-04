@@ -2,7 +2,7 @@ from datasets import Dataset
 
 from src.utils.utility import *
 from src.prepare_data.preference_scorers import *
-from prepare_data.output_generator import *
+from src.prepare_data.output_generator import *
 
 class WinRateCalculator:
     def __init__(self, 
@@ -50,11 +50,11 @@ class WinRateCalculator:
 
         pairs: list[dict] = []
         for i in range(n):
-            if len(ref_responses[i]['summaries']) > 0 and len(target_responses[i]['summaries']) > 0:
+            if len(ref_responses[i]['generated']) > 0 and len(target_responses[i]['generated']) > 0:
                 pairs.append({
-                    'prompt': prompts[i]['article'],
-                    'y1': ref_responses[i]['summaries'][0],
-                    'y2': target_responses[i]['summaries'][0],
+                    'prompt': prompts[i]['prompt'],
+                    'y1': ref_responses[i]['generated'][0],
+                    'y2': target_responses[i]['generated'][0],
                     'ref': prompts[i]['reference'] if scorer.require_ref() else "",
                     'meta': f"{i}, {i}, {i}"
                 })

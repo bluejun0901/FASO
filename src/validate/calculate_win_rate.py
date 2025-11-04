@@ -25,7 +25,7 @@ from src.utils.utility import *
 from omegaconf import OmegaConf
 import json
 
-from prepare_data.output_generator import *
+from src.prepare_data.output_generator import *
 from src.prepare_data.preference_scorers import *
 from src.validate.win_rate_calculator import WinRateCalculator
 from typing import Any
