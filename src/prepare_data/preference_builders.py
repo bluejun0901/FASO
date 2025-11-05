@@ -17,16 +17,45 @@ from src.utils.utility import (
 
 
 class PreferenceBuilder(ABC):
+    """Abstract interface for building preference datasets."""
+
     @abstractmethod
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        """Create comparison pairs from a dataset for preference scoring.
+
+        Args:
+            dataset (Dataset): Dataset containing generated candidates.
+
+        Returns:
+            list[dict]: List of comparison pair dictionaries.
+        """
         pass
 
     @abstractmethod
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
+        """Build a preference dataset using comparison outcomes.
+
+        Args:
+            comparisons (list[int | None]): Results from a preference scorer.
+
+        Returns:
+            Dataset: Dataset formatted for preference training.
+        """
         pass
 
 
 def get_cycle_removal_algorithm(name: str) -> Callable:
+    """Retrieve the cycle removal routine specified by name.
+
+    Args:
+        name (str): Identifier of the cycle removal algorithm.
+
+    Returns:
+        Callable: Function that takes an adjacency list and returns an acyclic version.
+
+    Raises:
+        Exception: If the algorithm name is not recognized.
+    """
     name = name.lower()
     if name == "kahn":
         return remove_cycles_kahn
@@ -40,11 +69,26 @@ def get_cycle_removal_algorithm(name: str) -> Callable:
 
 
 class CyclicPreferenceBuilder(PreferenceBuilder):
+    """Preference builder that evaluates all pairwise comparisons."""
+
     def __init__(self, scorer):
+        """Initialize the cyclic preference builder.
+
+        Args:
+            scorer: Preference scorer used to label pairwise comparisons.
+        """
         self.pairs = []
         self.scorer = scorer
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        """Generate all pairwise combinations for each example.
+
+        Args:
+            dataset (Dataset): Dataset containing generated outputs.
+
+        Returns:
+            list[dict]: List of comparison pair dictionaries.
+        """
         self.pairs = []
         for k, example in enumerate(dataset):
             prompt = example["prompt"]  # type: ignore
@@ -67,6 +111,14 @@ class CyclicPreferenceBuilder(PreferenceBuilder):
         return self.pairs
 
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
+        """Construct a preference dataset from comparison labels.
+
+        Args:
+            comparisons (list[int | None]): Preference labels for generated pairs.
+
+        Returns:
+            Dataset: Dataset containing chosen and rejected responses.
+        """
         result = []
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
@@ -85,17 +137,29 @@ class CyclicPreferenceBuilder(PreferenceBuilder):
 
 
 class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
-    """
-    Builds a DAG of preferences (cycle-free). Reasoning OFF.
-    """
+    """Build a DAG of preferences without reasoning metadata."""
 
     def __init__(self, config: OmegaConf, scorer: PreferenceScorer):
+        """Initialize the acyclic preference builder without reasons.
+
+        Args:
+            config (OmegaConf): Configuration controlling cycle removal options.
+            scorer (PreferenceScorer): Scorer used to determine preferences.
+        """
         self.scorer = scorer
         self.config = config
         self.example_count = 0
         self.pairs: list[dict] = []
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        """Generate pairwise comparisons for each dataset entry.
+
+        Args:
+            dataset (Dataset): Dataset containing candidate generations.
+
+        Returns:
+            list[dict]: List of comparison pair dictionaries.
+        """
         self.pairs = []
         self.example_count = len(dataset)
         for k, example in enumerate(dataset):
@@ -119,6 +183,14 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
         return self.pairs
 
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
+        """Construct a dataset by enforcing acyclicity on comparison results.
+
+        Args:
+            comparisons (list[int | None]): Preference labels from scoring.
+
+        Returns:
+            Dataset: Dataset formatted with chosen and rejected responses.
+        """
         self.groups = [[] for _ in range(self.example_count)]
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
@@ -169,16 +241,28 @@ class AcyclicNoReasonPreferenceBuilder(PreferenceBuilder):
 
 
 class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
-    """
-    Builds a DAG of preferences (cycle-free). Reasoning ON.
-    """
+    """Build a DAG of preferences while preserving reasoning chains."""
 
     def __init__(self, scorer: PreferenceScorer, config: OmegaConf):
+        """Initialize the acyclic preference builder with reasoning support.
+
+        Args:
+            scorer (PreferenceScorer): Scorer used to label comparisons.
+            config (OmegaConf): Configuration controlling DAG construction.
+        """
         self.scorer = scorer
         self.config = config
         self.pairs: list[dict] = []
 
     def generate_comparisons(self, dataset: Dataset) -> list[dict]:
+        """Generate comparison pairs for reasoning-aware DAG construction.
+
+        Args:
+            dataset (Dataset): Dataset containing generated responses.
+
+        Returns:
+            list[dict]: List of comparison pair dictionaries.
+        """
         self.pairs = []
         self.example_count = len(dataset)
         for k, example in enumerate(dataset):
@@ -202,6 +286,14 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
         return self.pairs
 
     def build_with_comparisons(self, comparisons: list[int | None]) -> Dataset:
+        """Construct a reasoning-preserving dataset from comparisons.
+
+        Args:
+            comparisons (list[int | None]): Preference labels from the scorer.
+
+        Returns:
+            Dataset: Dataset containing chosen and rejected responses.
+        """
         self.groups = [[] for _ in range(self.example_count)]
         for pref, pair in zip(comparisons, self.pairs):
             if pref is None:
@@ -257,6 +349,18 @@ class AcyclicReasonPreferenceBuilder(PreferenceBuilder):
 def get_preference_builder(
     config: OmegaConf, scorer: PreferenceScorer
 ) -> PreferenceBuilder:
+    """Instantiate a preference builder based on configuration.
+
+    Args:
+        config (OmegaConf): Builder configuration specifying the type.
+        scorer (PreferenceScorer): Scorer used for labeling comparisons.
+
+    Returns:
+        PreferenceBuilder: Initialized preference builder instance.
+
+    Raises:
+        Exception: If the builder type is not recognized.
+    """
     name = config.type.lower()
     if name == "cyclic":
         return CyclicPreferenceBuilder(scorer)

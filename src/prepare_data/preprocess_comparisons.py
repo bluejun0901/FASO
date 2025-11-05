@@ -29,6 +29,15 @@ SRC_ROOT = Path(os.getenv("SRC_ROOT")).resolve()  # type: ignore
 
 
 def generate_comparisons(dataset: Dataset, scorer: PreferenceScorer) -> list[dict]:
+    """Generate comparison pairs from a dataset for preference scoring.
+
+    Args:
+        dataset (Dataset): Dataset containing prompts, references, and generations.
+        scorer (PreferenceScorer): Scorer used to determine if references are needed.
+
+    Returns:
+        list[dict]: List of comparison dictionaries with prompts and responses.
+    """
     pairs = []
     for k, example in enumerate(dataset):
         prompt = example["prompt"]  # type: ignore

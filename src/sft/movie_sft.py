@@ -23,6 +23,15 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def process_one_data(data: dict, tokenizer: AutoTokenizer) -> dict:
+    """Tokenize a movie review example for supervised fine-tuning.
+
+    Args:
+        data (dict): Example containing ``prefix`` and ``review`` fields.
+        tokenizer (AutoTokenizer): Tokenizer used to format chat conversations.
+
+    Returns:
+        dict: Tokenized representation with labels masked for the prompt.
+    """
     prompt = f'Write a positive movie review starts with the following text: "{data["prefix"]}"'
     response = data["review"]
     full_text = tokenizer.apply_chat_template(
@@ -56,8 +65,14 @@ def process_one_data(data: dict, tokenizer: AutoTokenizer) -> dict:
 
 
 def preprocess_dataset(dataset: Dataset, tokenizer: AutoTokenizer) -> Dataset:
-    """
-    Preprocess the dataset by applying the process_one_date function to each example.
+    """Apply ``process_one_data`` to each movie review example.
+
+    Args:
+        dataset (Dataset): Dataset containing movie review prompts and responses.
+        tokenizer (AutoTokenizer): Tokenizer used for processing examples.
+
+    Returns:
+        Dataset: Tokenized dataset ready for training.
     """
     return dataset.map(
         process_one_data,

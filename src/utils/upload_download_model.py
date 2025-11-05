@@ -9,13 +9,12 @@ load_dotenv()
 def upload_model_to_huggingface(
     model_path: str, repo_id: str, token: str | None = None
 ):
-    """
-    Uploads a model to Hugging Face Hub.
+    """Upload a model directory to the Hugging Face Hub.
 
     Args:
-        model_path (str): Path to the model directory.
-        repo_id (str): Repository ID on Hugging Face Hub.
-        token (str, optional): Hugging Face API token. If None, it will use the token stored in the Hugging Face folder.
+        model_path (str): Path to the model directory to upload.
+        repo_id (str): Repository identifier on the Hugging Face Hub.
+        token (str | None): Optional API token; defaults to stored token if None.
     """
     if token is None:
         token = HfFolder.get_token()
@@ -34,6 +33,14 @@ def upload_model_to_huggingface(
 def upload_specific_folder_to_huggingface(
     repo_id: str, local_dir: str, path_in_repo: str, token: str | None = None
 ):
+    """Upload a specific local folder to a path within a Hugging Face repo.
+
+    Args:
+        repo_id (str): Repository identifier on the Hugging Face Hub.
+        local_dir (str): Local directory path to upload.
+        path_in_repo (str): Destination path within the repository.
+        token (str | None): Optional API token; defaults to stored token if None.
+    """
     if token is None:
         token = HfFolder.get_token()
 
@@ -52,13 +59,12 @@ def upload_specific_folder_to_huggingface(
 def download_model_from_huggingface(
     repo_id: str, model_path: str, token: str | None = None
 ):
-    """
-    Downloads a model from Hugging Face Hub.
+    """Download a model repository from the Hugging Face Hub.
 
     Args:
-        repo_id (str): Repository ID on Hugging Face Hub.
-        model_path (str): Path to save the downloaded model.
-        token (str, optional): Hugging Face API token. If None, it will use the token stored in the Hugging Face folder.
+        repo_id (str): Repository identifier on the Hugging Face Hub.
+        model_path (str): Local directory path where the model will be stored.
+        token (str | None): Optional API token; defaults to stored token if None.
     """
     if token is None:
         token = HfFolder.get_token()
@@ -75,14 +81,13 @@ def download_model_from_huggingface(
 def download_specific_folder_from_huggingface(
     repo_id: str, folder_name: str, local_dir: str, token: str | None = None
 ):
-    """
-    Downloads a specific folder from a model repository on Hugging Face Hub.
+    """Download a folder from a Hugging Face model repository.
 
     Args:
-        repo_id (str): Repository ID on Hugging Face Hub.
-        folder_name (str): Name of the folder to download.
-        local_dir (str): Local directory to save the downloaded folder.
-        token (str, optional): Hugging Face API token. If None, it will use the token stored in the Hugging Face folder.
+        repo_id (str): Repository identifier on the Hugging Face Hub.
+        folder_name (str): Name of the folder within the repository to fetch.
+        local_dir (str): Local directory where the folder will be saved.
+        token (str | None): Optional API token; defaults to stored token if None.
     """
     if token is None:
         token = HfFolder.get_token()
