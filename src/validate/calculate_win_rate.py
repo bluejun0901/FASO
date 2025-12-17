@@ -103,6 +103,10 @@ if __name__ == "__main__":
             rel_path = path.relative_to(MODEL_ROOT)
             target_paths.append(rel_path)
 
+    print("Target paths:")
+    for p in target_paths:
+        print(str(p))
+
     # Determine output directory
     result_dir = (
         Path(args.out_dir) if args.out_dir is not None else Path(config.result_dir)

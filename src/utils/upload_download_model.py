@@ -104,14 +104,8 @@ def download_specific_folder_from_huggingface(
 
 
 if __name__ == "__main__":
-    model_path = Path(os.getenv("DATA_ROOT")).resolve()  # type: ignore
-
-    token = os.getenv("HF_TOKEN") or HfFolder.get_token()
-
-    print("Uploading model to Hugging Face...")
-    upload_specific_folder_to_huggingface(
-        repo_id="bluejun/LLM_DAG_ALLIGN",
-        local_dir=str(model_path / "preprocessed"),
-        path_in_repo="",
-        token=token,
+    upload_model_to_huggingface(
+        model_path="models",
+        repo_id="bluejun/FASO",
+        token=os.getenv("HF_TOKEN") or HfFolder.get_token(),
     )

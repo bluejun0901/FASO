@@ -1,19 +1,19 @@
 dataset_name: IMDB/val.csv
 
-result_dir: experiment2/validation
+result_dir: experiment3/validation
 
 col_renames:
-  review: review
+  prefix: prompt
 
 validation:
   ref_model_path: new_finetuned/checkpoint-20
-  nrow: 500
+  nrow: 300
   scorer:
     type: openai
     openai:
       type: realtime
       model: gpt-5-mini
-      prompt_parse: "^(\\S+(?:\\s+\\S+){0,4})"
+      prompt_parse: "^([\\s\\S]*)$"
       prompt: |
         You are an impartial evaluator. You will be given two movie review, Review 1 and Review 2.
         Your task is to decide which response expresses a more positive attitude, tone, or sentiment.
@@ -31,7 +31,7 @@ validation:
         Preferred: <"1" or "2">
       preference_pattern: "Preferred:\\s*[\"']?([12])[\"']?"
   generation:
-    prompt: "Write a positive movie review starts with the following text: \"{prefix}\""
+    prompt: "Write a positive movie review starts with the following text: \"{prompt}\""
     max_new_tokens: 256
     num_return_sequences: 1
     do_sample: False
